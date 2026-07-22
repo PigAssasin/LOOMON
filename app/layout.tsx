@@ -5,7 +5,7 @@ import "./globals.css";
 import { AppProviders } from "@/src/components/app-providers";
 
 export const metadata: Metadata = {
-  title: "Pinterest Markers — Vietnamese craft, made personal",
+  title: "LOOMON — Craft lives on",
   description:
     "Discover Vietnamese ceramics and handmade gifts, refine your order with an agent, and place a USDC deposit on Arc.",
 };

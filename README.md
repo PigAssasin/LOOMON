@@ -1,6 +1,8 @@
-# Pinterest Markers
+# LOOMON
 
-Visual discovery marketplace for Vietnamese craft. Buyers browse a Pinterest-like collection, use a commerce agent to narrow requirements and prepare a quote, then place a direct USDC deposit on Arc. Sellers publish normalized product data through a guided studio.
+**Craft lives on.**
+
+LOOMON is an agent-powered visual marketplace that brings Vietnamese craft to global buyers and settles commerce on Arc. Buyers browse a visual collection, use a commerce agent to narrow requirements and prepare a quote, then place a direct USDC deposit on Arc. Sellers publish normalized product data through a guided studio.
 
 This implementation deliberately uses **no custom smart contract**. Supabase is the commercial source of truth; Arc Testnet is the payment settlement rail.
 

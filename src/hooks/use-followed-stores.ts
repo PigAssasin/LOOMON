@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const storageKey = "pinterest-markers-followed-stores";
+const storageKey = "loomon-followed-stores";
 
 export function useFollowedStores() {
   const [followed, setFollowed] = useState<string[]>([]);

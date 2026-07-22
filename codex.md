@@ -1,6 +1,6 @@
-# Pinterest Markers — Fixed Project Rules
+# LOOMON — Fixed Project Rules
 
-This file is the persistent operating guide for work on Pinterest Markers. Read it before planning or implementing changes. Update it only when a product or engineering rule has genuinely changed.
+This file is the persistent operating guide for work on LOOMON. Read it before planning or implementing changes. Update it only when a product or engineering rule has genuinely changed.
 
 ## 1. Communication and documentation
 
@@ -12,7 +12,8 @@ This file is the persistent operating guide for work on Pinterest Markers. Read 
 
 ## 2. Product identity
 
-- Pinterest Markers is a visual discovery and agent-assisted commerce platform for Vietnamese ceramics and handmade gifts.
+- LOOMON is an agent-powered visual commerce platform that brings Vietnamese craft to global buyers and settles commerce on Arc.
+- The permanent brand line is `Craft lives on.` The technical descriptor is `Agent-powered commerce, settled on Arc.`
 - The primary experience is visual and product-led, similar to Pinterest. It must not look like a crypto dashboard.
 - The agent supports discovery, consultation, requirement collection, quotes, invoices, wallet/payment assistance, order tracking, reminders, and after-order actions.
 - Arc is the payment infrastructure behind the experience. Blockchain complexity should remain hidden unless a user asks to inspect it.
@@ -124,7 +125,7 @@ This file is the persistent operating guide for work on Pinterest Markers. Read 
 ## 12. Order identity and notifications
 
 - Use the internal order UUID for relationships and authorization; never expose it as the primary customer-facing reference.
-- Public order references are immutable and follow `PM-YY-MM-XXXXXX` with a random, non-sequential suffix.
+- Public order references are immutable and follow `LM-YY-MM-XXXXXX` with a random, non-sequential suffix.
 - Every order status transition must append to `commerce.order_status_history`; never overwrite history.
 - Buyer and seller notification preferences are scoped per order and protected by participant-aware RLS.
 - Email reminders must be queued, deduplicated, idempotent at the provider, auditable, and safe to retry.

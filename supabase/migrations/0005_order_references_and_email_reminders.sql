@@ -10,7 +10,7 @@ declare
 begin
   loop
     token := translate(upper(substr(replace(extensions.gen_random_uuid()::text, '-', ''), 1, 6)), '01', 'GH');
-    candidate := 'PM-' || to_char(p_created_at at time zone 'UTC', 'YY-MM') || '-' || token;
+    candidate := 'LM-' || to_char(p_created_at at time zone 'UTC', 'YY-MM') || '-' || token;
     exit when not exists (select 1 from commerce.orders o where o.order_number = candidate);
   end loop;
   return candidate;
@@ -30,7 +30,7 @@ begin
   ) then
     alter table commerce.orders
       add constraint orders_order_number_format_check
-      check (order_number ~ '^PM-[0-9]{2}-[0-9]{2}-[A-Z2-9]{6}$') not valid;
+      check (order_number ~ '^LM-[0-9]{2}-[0-9]{2}-[A-Z2-9]{6}$') not valid;
   end if;
 end $$;
 

@@ -44,7 +44,7 @@ export function ProfileExperience() {
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      const stored = window.localStorage.getItem("pinterest-markers-profile");
+      const stored = window.localStorage.getItem("loomon-profile");
       if (stored) {
         const saved = { ...defaultProfile, ...(JSON.parse(stored) as Partial<EditableProfile>) };
         setProfile(saved);
@@ -57,7 +57,7 @@ export function ProfileExperience() {
   function saveProfile() {
     if (!canSave) return;
     setProfile(draft);
-    window.localStorage.setItem("pinterest-markers-profile", JSON.stringify(draft));
+    window.localStorage.setItem("loomon-profile", JSON.stringify(draft));
     setEditing(false);
   }
 

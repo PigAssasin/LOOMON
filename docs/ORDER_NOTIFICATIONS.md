@@ -4,7 +4,7 @@
 
 - `commerce.orders.id` is the internal UUID used by foreign keys and APIs.
 - `commerce.orders.order_number` is the immutable public reference shown to buyers, sellers and support.
-- New references use `PM-YY-MM-XXXXXX`, for example `PM-26-07-K7M4Q2`.
+- New references use `LM-YY-MM-XXXXXX`, for example `LM-26-07-K7M4Q2`.
 - The random suffix avoids exposing marketplace volume. The unique constraint remains the final collision guard.
 - Legacy references remain readable because the format constraint is introduced as `NOT VALID`; all new or updated values must use the new format.
 
@@ -22,7 +22,7 @@
 Set Edge Function secrets:
 
 ```bash
-supabase secrets set RESEND_API_KEY=re_... ORDER_EMAIL_FROM="Pinterest Markers <orders@your-domain.com>"
+supabase secrets set RESEND_API_KEY=re_... ORDER_EMAIL_FROM="LOOMON <orders@your-domain.com>"
 supabase functions deploy send-order-reminders
 ```
 

@@ -52,8 +52,8 @@ function EmailReminderCard() {
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      const storedProfile = window.localStorage.getItem("pinterest-markers-profile");
-      const storedReminder = window.localStorage.getItem(`pinterest-markers-order-email:${DEMO_ORDER_REFERENCE}`);
+      const storedProfile = window.localStorage.getItem("loomon-profile");
+      const storedReminder = window.localStorage.getItem(`loomon-order-email:${DEMO_ORDER_REFERENCE}`);
       try {
         if (storedReminder) {
           const reminder = JSON.parse(storedReminder) as { email?: string; enabled?: boolean };
@@ -72,7 +72,7 @@ function EmailReminderCard() {
 
   function saveReminder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    window.localStorage.setItem(`pinterest-markers-order-email:${DEMO_ORDER_REFERENCE}`, JSON.stringify({ email: email.trim(), enabled }));
+    window.localStorage.setItem(`loomon-order-email:${DEMO_ORDER_REFERENCE}`, JSON.stringify({ email: email.trim(), enabled }));
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1600);
   }

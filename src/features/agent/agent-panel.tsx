@@ -61,7 +61,7 @@ export function AgentPanel({ open, onClose, initialProduct }: { open: boolean; o
   }
 
   return (
-    <div className="agent-layer" role="dialog" aria-modal="true" aria-label="Pinterest Markers commerce agent">
+    <div className="agent-layer" role="dialog" aria-modal="true" aria-label="LOOMON commerce agent">
       <button className="agent-scrim" onClick={onClose} aria-label="Close agent" />
       <aside className="agent-panel">
         <header className="agent-header">

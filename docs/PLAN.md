@@ -1,4 +1,4 @@
-# Pinterest Markers — Master Build Plan
+# LOOMON — Master Build Plan
 
 Status: frontend frozen; Phase 0 decisions and verified database/contract foundations are next  
 Last updated: 2026-07-21  
@@ -72,7 +72,7 @@ Mandatory characteristics:
 - curly-bracket section annotations and other recurring signatures where the approved UX composition calls for section labels;
 - responsive preservation of the same hierarchy and atmosphere, not a separate mobile design language.
 
-The source reference describes decorative imagery without photography. Pinterest Markers still requires product photographs because they are the catalog itself. Product photography is therefore treated as functional content inside feed/detail/media areas; page backgrounds, decorative art, controls, and layout remain governed by the locked dark GSAP-derived system.
+The source reference describes decorative imagery without photography. LOOMON still requires product photographs because they are the catalog itself. Product photography is therefore treated as functional content inside feed/detail/media areas; page backgrounds, decorative art, controls, and layout remain governed by the locked dark GSAP-derived system.
 
 No implementation may introduce an unapproved color, font, radius, shadow, filled CTA, light-theme page, or generic dashboard component. If a functional requirement appears incompatible with the source system, document the conflict and request approval rather than improvising.
 

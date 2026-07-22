@@ -8,8 +8,8 @@ import { WagmiProvider } from "wagmi";
 import { arcTestnet } from "@/src/lib/chains";
 
 const wagmiConfig = getDefaultConfig({
-  appName: "Pinterest Markers",
-  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "pinterest-markers-local",
+  appName: "LOOMON",
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "loomon-local",
   chains: [arcTestnet],
   ssr: true,
 });

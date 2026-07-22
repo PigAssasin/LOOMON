@@ -25,7 +25,7 @@ export function OrdersCenter() {
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      const stored = window.localStorage.getItem("pinterest-markers-profile");
+      const stored = window.localStorage.getItem("loomon-profile");
       if (!stored) return;
       try {
         const profile = JSON.parse(stored) as { role?: OrderMode };
