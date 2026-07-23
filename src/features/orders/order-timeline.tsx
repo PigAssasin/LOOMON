@@ -5,6 +5,7 @@ import { ArrowLeft, BellRing, Check, Clock3, Copy, ExternalLink, Mail, Sparkles 
 import { useEffect, useState } from "react";
 import { SiteHeader } from "@/src/components/site-header";
 import { DEMO_ORDER_REFERENCE } from "@/src/domain/order-reference";
+import { useAgent } from "@/src/features/agent/agent-provider";
 
 const milestones = [
   { title: "Deposit confirmed", detail: "96.00 USDC on Arc Testnet", status: "done" },
@@ -15,6 +16,7 @@ const milestones = [
 
 export function OrderTimeline() {
   const [copied, setCopied] = useState(false);
+  const { openAgent } = useAgent();
 
   async function copyReference() {
     await navigator.clipboard.writeText(DEMO_ORDER_REFERENCE);
@@ -35,7 +37,7 @@ export function OrderTimeline() {
       <div className="order-grid">
         <ol className="timeline">{milestones.map((milestone) => <li className={`timeline-${milestone.status}`} key={milestone.title}><span>{milestone.status === "done" ? <Check size={18} /> : milestone.status === "current" ? <Clock3 size={18} /> : null}</span><div><strong>{milestone.title}</strong><p>{milestone.detail}</p></div></li>)}</ol>
         <div className="order-side-stack">
-          <aside className="order-agent-card"><Sparkles size={24} /><h2>I’ll follow up tomorrow.</h2><p>If the maker has not confirmed the logo process by 10:00, I’ll send a reminder and update this timeline.</p><button className="ghost-button" type="button">Change reminder</button></aside>
+          <aside className="order-agent-card"><Sparkles size={24} /><h2>I’ll follow up tomorrow.</h2><p>If the maker has not confirmed the logo process by 10:00, I’ll send a reminder and update this timeline.</p><button className="ghost-button" type="button" onClick={() => openAgent({ goal: "Change the follow-up schedule for this order and notify me only if the maker misses it.", contextLabel: "Order reminder" })}>Change with Agent</button></aside>
           <EmailReminderCard />
         </div>
       </div>

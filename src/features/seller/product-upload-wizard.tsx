@@ -56,18 +56,18 @@ export function ProductUploadWizard() {
     <main>
       <div className="static-header-wrap"><SiteHeader /></div>
       <section className="listing-studio">
-        <header className="listing-heading"><div><h1>List a product.</h1><p>Describe it naturally. The agent will organize the details for buyers.</p></div><span>{validation.success ? <><Check size={15} /> Ready</> : `${issues.length} details left`}</span></header>
+        <header className="listing-heading"><div><h1>List a product.</h1><p>Describe it naturally, or use the green Agent button for guided help.</p></div><span>{validation.success ? <><Check size={15} /> Ready</> : `${issues.length} details left`}</span></header>
 
         <div className="listing-layout">
           <section className="listing-agent-column">
-            <div className="listing-agent-title"><span><Sparkles size={21} /></span><div><h2>Tell the agent</h2><p>You can write in Vietnamese or English.</p></div></div>
+            <div className="listing-agent-title"><span><ImagePlus size={21} /></span><div><h2>Describe the product</h2><p>You can write in Vietnamese or English.</p></div></div>
             <label className="listing-prompt">
               <span className="sr-only">Describe your product</span>
               <textarea rows={8} value={prompt} onChange={(event) => { setPrompt(event.target.value); setAgentDone(false); }} placeholder="Ví dụ: Tôi bán bộ cốc men ngọc làm thủ công, giá từ 12 USDC..." />
-              <button type="button" disabled={!prompt.trim()} onClick={askAgent}><Send size={18} /><span>Build listing</span></button>
+              <button type="button" disabled={!prompt.trim()} onClick={askAgent}><Send size={18} /><span>Extract details</span></button>
             </label>
             <button className="listing-example" type="button" onClick={() => { setPrompt(examplePrompt); setAgentDone(false); }}><Sparkles size={14} /> Try an example</button>
-            {agentDone ? <div className="listing-agent-result"><Check size={17} /><p><strong>I structured the listing.</strong> Please check the highlighted details before submitting.</p></div> : null}
+            {agentDone ? <div className="listing-agent-result"><Check size={17} /><p><strong>Details extracted.</strong> Check the highlighted fields before submitting.</p></div> : null}
 
             <div className="listing-media-block">
               <div><h2>Photos</h2><span>{images.length}/6</span></div>

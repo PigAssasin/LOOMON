@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { WagmiProvider } from "wagmi";
 import { arcTestnet } from "@/src/lib/chains";
+import { AgentProvider } from "@/src/features/agent/agent-provider";
 
 const wagmiConfig = getDefaultConfig({
   appName: "LOOMON",
@@ -24,7 +25,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
           modalSize="compact"
           theme={darkTheme({ accentColor: "#abff84", accentColorForeground: "#0e100f", borderRadius: "large" })}
         >
-          {children}
+          <AgentProvider>{children}</AgentProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

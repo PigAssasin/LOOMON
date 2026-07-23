@@ -6,11 +6,13 @@ import { usePathname } from "next/navigation";
 import { useAccount } from "wagmi";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { cn } from "@/src/lib/cn";
+import { useAgent } from "@/src/features/agent/agent-provider";
 
 export function SiteHeader({ onOpenAgent, children }: { onOpenAgent?: () => void; children?: React.ReactNode }) {
   const pathname = usePathname();
   const { isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
+  const { openAgent } = useAgent();
 
   function openAccount() {
     if (!isConnected) {
@@ -25,7 +27,7 @@ export function SiteHeader({ onOpenAgent, children }: { onOpenAgent?: () => void
       <nav className="app-dock" aria-label="App navigation">
         <DockLink href="/app" label="Home" active={pathname === "/app"}><Home size={21} /></DockLink>
         <DockLink href="/app/orders" label="Orders" active={pathname.startsWith("/app/orders")}><PackageSearch size={21} /></DockLink>
-        {onOpenAgent ? <DockButton label="Ask agent" featured onClick={onOpenAgent}><Sparkles size={22} /></DockButton> : <DockLink href="/app" label="Ask agent" featured><Sparkles size={22} /></DockLink>}
+        <DockButton label="Personal agent" featured onClick={onOpenAgent ?? (() => openAgent())}><Sparkles size={22} /></DockButton>
         <DockLink href="/app/seller/products/new" label="Add product" active={pathname.includes("/seller/")}><Plus size={22} /></DockLink>
         {isConnected ? <DockLink href="/app/profile" label="Profile" active={pathname === "/app/profile"}><UserRound size={21} /></DockLink> : <DockButton label="Wallet" onClick={openAccount}><WalletCards size={21} /></DockButton>}
       </nav>

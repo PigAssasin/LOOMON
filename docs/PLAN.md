@@ -1,22 +1,29 @@
 # LOOMON — Master Build Plan
 
-Status: frontend frozen; Phase 0 decisions and verified database/contract foundations are next  
-Last updated: 2026-07-21  
+Status: product direction pivoted; upload-first custom souvenir MVP is authoritative
+Last updated: 2026-07-22
 Primary rulebook: `codex.md`
+
+Current authoritative plan: `docs/CUSTOM-SOUVENIR-MVP-PLAN.md`
+
+Current Agent-commerce flow addendum: `docs/AGENT-COMMERCE-FLOW.md`
+
+The marketplace database and contract plans remain future architecture references. They are not the next implementation sequence and must not be executed until the custom-souvenir validation gates pass.
 
 ## 1. Outcome
 
-Build a visual discovery platform for Vietnamese ceramics and handmade gifts where:
+Build an upload-first custom souvenir studio where:
 
-1. Buyers browse and save products as naturally as they would on Pinterest.
-2. A commerce agent searches, recommends, compares, collects missing commercial requirements, prepares quotes and invoices, assists with wallet/payment, and manages reminders and order follow-up.
-3. Sellers create and upload well-structured product catalogs, supported by validation and AI-assisted extraction without surrendering control of commercial facts.
-4. Supabase provides the canonical data, authentication, storage, authorization, search projections, and workflow persistence.
-5. Arc Testnet handles USDC deposits behind a Web2-like experience through embedded Arc wallets or external wallets connected through RainbowKit.
+1. A user uploads a photo, logo or artwork before choosing a product.
+2. The Agent analyzes the image and recommends curated Vietnamese craft souvenirs that can realistically support it.
+3. The Agent produces concept previews and accepts natural-language revisions to placement, crop, color, text and product choice.
+4. The user approves a production-ready customization snapshot and creates an order.
+5. Supabase stores the canonical asset, customization, preview, order and Agent audit data.
+6. Arc Testnet demonstrates smart-account delegation and USDC custom-order escrow while keeping the interface Web2-simple.
 
 The first release proves one complete path:
 
-`discover -> consult agent -> structured requirements -> quote -> deposit invoice -> Arc USDC payment -> confirmed order -> follow-up reminder`
+`upload image -> Agent analysis -> compatible souvenir previews -> natural-language revision -> approve design -> Arc Testnet order -> tracked result`
 
 ## 2. Architecture
 
@@ -44,6 +51,7 @@ flowchart TD
 
 - The database owns facts and workflow state.
 - The agent orchestrates tools; it is not a database administrator or a source of commercial truth.
+- The Agent is a first-class Arc economic actor with a separate smart account. The model emits typed intents; a deterministic delegation, risk, and signer layer is the only component allowed to authorize signatures.
 - Search indexes are disposable and reproducible from canonical catalog versions.
 - Wallet providers are hidden behind a common adapter.
 - Payment verification and privileged state transitions run on the server.
@@ -253,7 +261,8 @@ All stored units are canonical metric units. Display conversion belongs to prese
 - `variant_id nullable`
 - `currency_code`
 - `price_type`: fixed, starting_from, tiered, quote_only
-- `unit_amount numeric(20,6)`
+- `unit_amount_minor bigint`
+- `currency_decimals smallint`
 - `minimum_quantity`
 - `maximum_quantity nullable`
 - `valid_from`
@@ -671,9 +680,10 @@ All tools use runtime schemas, authorization, idempotency where applicable, stru
 
 #### `wallet.accounts`
 
-- `user_id`
+- `owner_type`: user, maker, agent, platform
+- `owner_reference`
 - `provider`
-- `wallet_type`: embedded, external
+- `wallet_type`: EOA, embedded smart account, Agent smart account
 - `custody_type`
 - `chain_id`
 - `address`
@@ -682,21 +692,24 @@ All tools use runtime schemas, authorization, idempotency where applicable, stru
 
 #### `wallet.delegations`
 
-- wallet/account reference
+- grantor wallet and grantee Agent wallet
 - capability scope
-- allowed recipients/contracts
-- per-transaction and period limits
+- allowed chain/token/recipients/contracts/function selectors
+- order/maker/category scope
+- per-transaction, period, and total budget limits
+- human-approval threshold
 - start/expiry
-- revocation status
+- revocation nonce and status
 - authorization evidence
 
 ### Provider abstraction
 
 - `EmbeddedArcWalletAdapter`
 - `RainbowKitWalletAdapter`
+- `AgentSmartAccountAdapter`
 - shared operations for balance, capability, preparation, approval, submission, and receipt.
 
-The embedded wallet is the default Web2 path. RainbowKit supports external Rainbow, MetaMask, Coinbase, Rabby, WalletConnect, and injected wallets. One linked wallet is selected as the active payment source.
+The embedded wallet is the default Web2 path. RainbowKit supports external Rainbow, MetaMask, Coinbase, Rabby, WalletConnect, and injected wallets. One linked wallet is selected as the active payment source. Buyer, maker, and platform Agent wallets are separate smart accounts and may execute the commerce lifecycle only through revocable delegated policies. The complete model is specified in `docs/PHASE-2-DATABASE-CONTRACT-PLAN.md`.
 
 ### Payments
 
@@ -712,7 +725,9 @@ Implementation order:
 1. Simulated adapter with real state machine.
 2. Arc Testnet USDC transfer.
 3. Server-side receipt/event verification.
-4. Embedded-wallet delegation only after policy behavior is tested.
+4. ERC-4337 Agent smart-account provider spike on Arc Testnet.
+5. Typed intent, simulation, delegation budget, isolated signer, revocation, and emergency-freeze tests.
+6. Enable bounded autonomous execution only after policy behavior and contract permissions pass review.
 
 ## 10. Notifications and reminders
 
@@ -797,26 +812,21 @@ Acceptance:
 
 ### Phase 2 — Database foundation
 
-Planned migrations:
+The normalized schema, clean migration replacement strategy, RLS matrix, Arc escrow architecture, event projection, tests, work packages, and approval decisions are defined in `docs/PHASE-2-DATABASE-CONTRACT-PLAN.md`. That document is authoritative for Phase 2 when it is more specific than this summary.
 
-- `0001_extensions.sql`
-- `0002_identity_and_makers.sql`
-- `0003_catalog_and_versions.sql`
-- `0004_taxonomy.sql`
-- `0005_customizations_and_media.sql`
-- `0006_seller_ingestion.sql`
-- `0007_commerce.sql`
-- `0008_wallets_and_payments.sql`
-- `0009_agent.sql`
-- `0010_search.sql`
-- `0011_notifications.sql`
-- `0012_rls.sql`
-- `0013_seed_taxonomy.sql`
+Execution summary:
+
+- Replace the unreleased prototype migration chain with the clean 16-migration v1 chain specified in the Phase 2 document.
+- Normalize identity, makers/social, catalog, commerce, fulfillment/disputes, wallets/payments, Agent, search, notifications, outbox, and audit domains.
+- Generate the TypeScript database types, data dictionary, ERD, RLS matrix, and pgTAP suite.
+- Create the Foundry specification and versioned factory/per-order escrow architecture after the commercial policies are approved.
+- Deploy only to Arc Testnet after unit, fuzz, invariant, static-analysis, threat-model, and event-projection gates pass.
 
 Acceptance:
 
-- Migrations apply from an empty database and roll forward consistently.
-- Constraints and RLS tests pass.
+- Migrations apply from an empty database twice and produce the same schema and stable seed codes.
+- Constraints, RLS, state-transition, idempotency, queue, and event-replay tests pass.
+- Contract and database projections reconcile exactly for funding, release, refund, and dispute scenarios.
 
 ### Phase 3 — Seller catalog ingestion
 
@@ -877,8 +887,10 @@ Acceptance:
 - Supabase Auth.
 - Embedded Arc wallet onboarding.
 - RainbowKit external wallets.
+- Separate buyer, maker, and platform-operations Agent smart accounts.
 - Signed wallet linking.
 - Active payment wallet selection.
+- Delegation policies, session keys, budgets, simulation, risk gate, revocation, and emergency freeze.
 - Arc chain guard and USDC display rules.
 
 Acceptance:
@@ -886,6 +898,7 @@ Acceptance:
 - A Web2 user can onboard without seed phrase or manual network setup.
 - An external-wallet user can connect and switch to Arc.
 - Linked-wallet ownership is cryptographically verified.
+- An Agent wallet can execute only an exact typed intent inside its active scope and budget; revocation is immediately enforced.
 
 ### Phase 8 — Agent runtime
 
@@ -894,6 +907,7 @@ Acceptance:
 - Product search/recommendation/compare.
 - Requirement extraction and missing-field logic.
 - Seller draft-assistance tools.
+- Autonomous commerce tools for order creation/acceptance, escrow funding, milestone submission/approval, permitted refunds, withdrawal, reminders, and reconciliation.
 - Tool-call audit and agent evaluation tests.
 
 Acceptance:
@@ -901,6 +915,7 @@ Acceptance:
 - Agent cannot invent commercial values or access another user's data.
 - Every recommendation includes product-version evidence.
 - Prompt-like seller content cannot override agent policy.
+- The model cannot access signing material, submit arbitrary calldata, or expand its own delegation.
 
 ### Phase 9 — Quotes, invoices, and orders
 
@@ -1032,6 +1047,8 @@ These do not block writing the UX/UI prompt, but must be resolved before impleme
 8. Whether bulk import is required for MVP or the first post-MVP seller release.
 
 ## 15. Next action
+
+The checkpoint-by-checkpoint Phase 2 execution plan is maintained separately in `docs/PHASE-2-SUPERPOWERS-EXECUTION-PLAN.md`. It is the implementation checklist for Supabase normalization, Agent smart accounts, Arc contracts, TDD, and release gates.
 
 Pause feature-level frontend work. Execute the gates in `docs/FRONTEND_FREEZE.md` in this order:
 

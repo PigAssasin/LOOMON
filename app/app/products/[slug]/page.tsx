@@ -6,9 +6,10 @@ export function generateStaticParams() {
   return products.map((product) => ({ slug: product.slug }));
 }
 
-export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function ProductPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ customize?: string }> }) {
   const { slug } = await params;
+  const query = await searchParams;
   const product = getProductBySlug(slug);
   if (!product) notFound();
-  return <ProductDetailExperience product={product} />;
+  return <ProductDetailExperience product={product} initialCustomizing={query.customize === "1"} />;
 }

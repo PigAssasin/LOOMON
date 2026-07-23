@@ -9,3 +9,7 @@ test-results/
 !.env.example
 *.tsbuildinfo
 *.log
+contracts/out/
+contracts/cache/
+.codex-tmp/
+outputs/

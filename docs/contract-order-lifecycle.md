@@ -1,5 +1,7 @@
 # LOOMON — Order and Escrow Lifecycle
 
+Status: future marketplace lifecycle reference. The current custom-souvenir MVP uses the narrower lifecycle defined in `docs/CUSTOM-SOUVENIR-MVP-PLAN.md`.
+
 ## Architectural decision
 
 The Orders UI groups contract states into three user-facing stages:
@@ -10,7 +12,7 @@ The Orders UI groups contract states into three user-facing stages:
 
 This follows Arc's programmable escrow and ERC-8183 job lifecycle while keeping the interface understandable for a normal marketplace user.
 
-`ERC-8183` is referenced because it is part of Arc's official Agentic Economy documentation. It is not a Ritual dependency, integration, SDK, or platform reference. The product remains Arc-only; the final physical-commerce contract may adopt only the lifecycle concepts that pass the project's own contract specification and security review.
+`ERC-8183` is referenced because it is part of Arc's official Agentic Economy documentation. LOOMON remains Arc-only; the final physical-commerce contract may adopt only the lifecycle concepts that pass the project's own contract specification and security review.
 
 ## Roles
 

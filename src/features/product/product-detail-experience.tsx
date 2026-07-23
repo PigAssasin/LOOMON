@@ -6,16 +6,30 @@ import { useState } from "react";
 import type { Product } from "@/src/domain/product";
 import { ProductVisual } from "@/src/components/product-visual";
 import { SiteHeader } from "@/src/components/site-header";
-import { AgentPanel } from "@/src/features/agent/agent-panel";
+import { useAgent } from "@/src/features/agent/agent-provider";
 import { formatMoney } from "@/src/lib/money";
 import { makerSlug } from "@/src/data/stores";
+import { ProductCustomizationStudio } from "@/src/features/customization/product-customization-studio";
 
-export function ProductDetailExperience({ product }: { product: Product }) {
-  const [agentOpen, setAgentOpen] = useState(false);
+export function ProductDetailExperience({ product, initialCustomizing = false }: { product: Product; initialCustomizing?: boolean }) {
+  const { openAgent } = useAgent();
+  const [customizing, setCustomizing] = useState(initialCustomizing);
+  const openCustomization = () => {
+    setCustomizing(true);
+    const url = new URL(window.location.href);
+    url.searchParams.set("customize", "1");
+    window.history.replaceState({}, "", url);
+  };
+  const closeCustomization = () => {
+    setCustomizing(false);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("customize");
+    window.history.replaceState({}, "", url);
+  };
 
   return (
     <main>
-      <div className="static-header-wrap"><SiteHeader onOpenAgent={() => setAgentOpen(true)} /></div>
+      <div className="static-header-wrap"><SiteHeader /></div>
       <section className="product-detail">
         <div className="product-detail-media"><ProductVisual product={product} className="product-detail-visual" /></div>
         <div className="product-detail-copy">
@@ -25,7 +39,7 @@ export function ProductDetailExperience({ product }: { product: Product }) {
 
           <div className="purchase-panel">
             <div className="product-price"><span>From</span><strong>{formatMoney(product.priceFrom)}</strong><small>per piece</small></div>
-            <button className="gradient-stroke-button full-width" onClick={() => setAgentOpen(true)} type="button"><Sparkles size={18} /> Customize with the agent</button>
+            <button className="gradient-stroke-button full-width" onClick={openCustomization} type="button"><Sparkles size={18} /> Customize with agent</button>
             <dl className="product-facts">
               <div><dt><PackageCheck size={17} /> Minimum</dt><dd>{product.minimumOrderQuantity} pieces</dd></div>
               <div><dt><Clock3 size={17} /> Lead time</dt><dd>{product.leadTimeMinDays}–{product.leadTimeMaxDays} days</dd></div>
@@ -38,10 +52,10 @@ export function ProductDetailExperience({ product }: { product: Product }) {
             {product.customizable ? <div><dt>Custom options</dt><dd>{product.customizationCapabilities.join(", ")}</dd></div> : null}
           </dl>
 
-          <SellerDetail product={product} onAsk={() => setAgentOpen(true)} />
+          <SellerDetail product={product} onAsk={() => openAgent({ goal: `Tell me whether ${product.makerName} is the right maker for my order.`, contextLabel: product.makerName })} />
         </div>
       </section>
-      <AgentPanel open={agentOpen} onClose={() => setAgentOpen(false)} initialProduct={product} />
+      <ProductCustomizationStudio product={product} open={customizing} onClose={closeCustomization} />
     </main>
   );
 }

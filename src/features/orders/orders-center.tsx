@@ -5,7 +5,7 @@ import { ArrowUpRight, Check, Clock3, PackageCheck, ShoppingBag, Sparkles, Store
 import { useEffect, useState } from "react";
 import { SiteHeader } from "@/src/components/site-header";
 import { ProductVisual } from "@/src/components/product-visual";
-import { AgentPanel } from "@/src/features/agent/agent-panel";
+import { useAgent } from "@/src/features/agent/agent-provider";
 import { getProductBySlug } from "@/src/data/products";
 import { DEMO_ORDER_REFERENCE } from "@/src/domain/order-reference";
 
@@ -17,7 +17,8 @@ type SellerTab = "requests" | "active" | "history";
 type RequestState = "pending" | "accepted" | "declined";
 
 export function OrdersCenter() {
-  const [agentOpen, setAgentOpen] = useState(false);
+  const { openAgent } = useAgent();
+  const openOrderAgent = () => openAgent({ goal: `Manage order ${DEMO_ORDER_REFERENCE}, check its next action and handle follow-up for me.`, contextLabel: `Order ${DEMO_ORDER_REFERENCE}` });
   const [mode, setMode] = useState<OrderMode>("buyer");
   const [buyerTab, setBuyerTab] = useState<BuyerTab>("active");
   const [sellerTab, setSellerTab] = useState<SellerTab>("requests");
@@ -53,7 +54,7 @@ export function OrdersCenter() {
 
   return (
     <main>
-      <div className="static-header-wrap"><SiteHeader onOpenAgent={() => setAgentOpen(true)} /></div>
+      <div className="static-header-wrap"><SiteHeader /></div>
       <section className="orders-center">
         <header className="orders-center-heading">
           <div><h1>Orders</h1><p>Buying and selling stay separate, while the agent keeps both sides coordinated.</p></div>
@@ -72,7 +73,7 @@ export function OrdersCenter() {
             <OrderTab index="02" label="In progress" count={1} active={buyerTab === "active"} onClick={() => setBuyerTab("active")} />
             <OrderTab index="03" label="History" count={0} active={buyerTab === "history"} onClick={() => setBuyerTab("history")} />
           </nav>
-          <BuyerWorkspace tab={buyerTab} onOpenAgent={() => setAgentOpen(true)} />
+          <BuyerWorkspace tab={buyerTab} onOpenAgent={openOrderAgent} />
         </> : <>
           <OrderStatusStrip items={[{ label: "Open requests", value: sellerRequestCount.toString().padStart(2, "0") }, { label: "Active production", value: sellerActiveCount.toString().padStart(2, "0") }, { label: "Response target", value: sellerRequestCount ? "Today · 17:00" : "All clear" }]} />
           <nav className="order-contract-tabs" aria-label="Selling order stages" role="tablist">
@@ -80,10 +81,9 @@ export function OrdersCenter() {
             <OrderTab index="02" label="Active" count={sellerActiveCount} active={sellerTab === "active"} onClick={() => setSellerTab("active")} />
             <OrderTab index="03" label="History" count={sellerHistoryCount} active={sellerTab === "history"} onClick={() => setSellerTab("history")} />
           </nav>
-          <SellerWorkspace tab={sellerTab} requestState={requestState} onAccept={acceptRequest} onDecline={declineRequest} onRequestChanges={() => setAgentOpen(true)} />
+          <SellerWorkspace tab={sellerTab} requestState={requestState} onAccept={acceptRequest} onDecline={declineRequest} onRequestChanges={openOrderAgent} />
         </>}
       </section>
-      <AgentPanel open={agentOpen} onClose={() => setAgentOpen(false)} initialProduct={orderProduct} />
     </main>
   );
 }

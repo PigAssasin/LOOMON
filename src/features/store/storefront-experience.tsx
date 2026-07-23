@@ -1,12 +1,11 @@
 "use client";
 
 import { Check, Clock3, Heart, MapPin, MessageCircle, ShieldCheck, Sparkles, Star } from "lucide-react";
-import { useState } from "react";
 import type { StoreProfile } from "@/src/data/stores";
 import { getStoreProducts } from "@/src/data/stores";
 import { ProductCard } from "@/src/components/product-card";
 import { SiteHeader } from "@/src/components/site-header";
-import { AgentPanel } from "@/src/features/agent/agent-panel";
+import { useAgent } from "@/src/features/agent/agent-provider";
 import { useFollowedStores } from "@/src/hooks/use-followed-stores";
 
 const reviewCopy = [
@@ -16,14 +15,14 @@ const reviewCopy = [
 ];
 
 export function StorefrontExperience({ store }: { store: StoreProfile }) {
-  const [agentOpen, setAgentOpen] = useState(false);
+  const { openAgent } = useAgent();
   const { followed, toggleFollow } = useFollowedStores();
   const storeProducts = getStoreProducts(store.name);
   const isFollowing = followed.includes(store.slug);
 
   return (
     <main>
-      <div className="static-header-wrap"><SiteHeader onOpenAgent={() => setAgentOpen(true)} /></div>
+      <div className="static-header-wrap"><SiteHeader /></div>
       <section className="storefront">
         <header className="storefront-hero">
           <div className={`storefront-avatar accent-bg-${store.accent}`}>{store.initials}</div>
@@ -34,7 +33,7 @@ export function StorefrontExperience({ store }: { store: StoreProfile }) {
           </div>
           <div className="storefront-actions">
             <button className={isFollowing ? "ghost-button following" : "gradient-stroke-button"} type="button" onClick={() => toggleFollow(store.slug)}>{isFollowing ? <Check size={18} /> : <Heart size={18} />}{isFollowing ? "Following" : "Follow store"}</button>
-            <button className="storefront-agent-button" type="button" onClick={() => setAgentOpen(true)}><Sparkles size={18} /> Ask the agent</button>
+            <button className="storefront-agent-button" type="button" onClick={() => openAgent({ goal: `Review ${store.name}, compare their products and help me prepare an order.`, contextLabel: store.name })}><Sparkles size={18} /> Ask the agent</button>
           </div>
         </header>
 
@@ -58,7 +57,6 @@ export function StorefrontExperience({ store }: { store: StoreProfile }) {
           <div>{reviewCopy.map(([name, copy]) => <article key={name}><MessageCircle size={19} /><p>“{copy}”</p><span>{name}<small>Verified buyer</small></span></article>)}</div>
         </section>
       </section>
-      <AgentPanel open={agentOpen} onClose={() => setAgentOpen(false)} />
     </main>
   );
 }

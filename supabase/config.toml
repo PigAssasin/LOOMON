@@ -3,7 +3,7 @@ project_id = "loomon"
 [api]
 enabled = true
 port = 54321
-schemas = ["public", "catalog", "commerce", "agent", "wallet", "payments", "search", "notifications"]
+schemas = ["public", "catalog", "commerce", "customization", "agent", "wallet", "payments", "messaging", "search", "notifications"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
 

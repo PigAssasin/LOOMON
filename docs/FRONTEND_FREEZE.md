@@ -1,11 +1,11 @@
 # Frontend freeze review
 
 Date: 2026-07-21  
-Status: frozen as an integration-ready demo
+Status: retained as a visual-system baseline; product flow is no longer frozen after the custom-souvenir pivot
 
 ## Freeze decision
 
-The frontend is visually and functionally complete enough to pause feature design and move into domain contracts, Supabase, backend services, and Arc contract work. Future frontend changes should be limited to integration states, verified accessibility defects, and backend-driven requirements.
+The existing frontend remains the approved visual language and a useful marketplace/inspiration demo. The new upload-first custom-souvenir direction requires a new creation flow and may change route composition, information hierarchy and demo state. Reuse the design tokens, motion language, bottom navigation, cards and product-detail quality; do not treat the old marketplace flow as the current MVP specification.
 
 ## Verified
 
@@ -15,7 +15,7 @@ The frontend is visually and functionally complete enough to pause feature desig
 - Product tiles never span multiple columns; wide tiles are normalized collections with dedicated banner assets.
 - Runtime source uses only the approved design palette and contains no `box-shadow` declarations.
 - Lint, TypeScript, unit tests, and production build pass.
-- No `ritual` string exists in application source or project documentation.
+- Application source and project documentation contain only LOOMON, Arc, and the dependencies explicitly approved for this project.
 
 ## Deferred by design
 
@@ -68,4 +68,3 @@ These items do not block the frontend freeze. They belong to the following platf
 - Replace demo adapters one domain at a time without redesigning the screens.
 - Add loading/error/wrong-network/pending states required by the real services.
 - Run full buyer–seller–agent Arc Testnet E2E tests.
-

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowUpRight, Check, Clock3, MapPin, Package2, Search, ShieldCheck, SlidersHorizontal, Sparkles, Star, X } from "lucide-react";
 import { Fragment, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
-import { AgentPanel } from "@/src/features/agent/agent-panel";
+import { useAgent } from "@/src/features/agent/agent-provider";
 import { CollectionCard } from "@/src/components/collection-card";
 import { ProductCard } from "@/src/components/product-card";
 import { SiteHeader } from "@/src/components/site-header";
@@ -37,13 +37,12 @@ const sortOptions = [
 ] as const;
 
 export function DiscoveryExperience() {
-  const [agentOpen, setAgentOpen] = useState(false);
+  const { openAgent } = useAgent();
   const [category, setCategory] = useState<(typeof categories)[number]>("All");
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sort, setSort] = useState<"recommended" | "price-low" | "price-high">("recommended");
   const [focus, setFocus] = useState<ProductFocus | null>(null);
-  const [agentProduct, setAgentProduct] = useState<Product>();
   const [activeHotSearch, setActiveHotSearch] = useState("All");
   const [activeCollection, setActiveCollection] = useState<ProductCollection | null>(null);
   const deferredSearch = useDeferredValue(search);
@@ -83,7 +82,7 @@ export function DiscoveryExperience() {
 
   return (
     <main>
-      <SiteHeader onOpenAgent={() => setAgentOpen(true)}>
+      <SiteHeader>
         <div className="discovery-search-header">
           <div className="discovery-search-box"><Search size={20} /><input aria-label="Search the marketplace" value={search} onChange={(event) => { setActiveCollection(null); setSearch(event.target.value); setActiveHotSearch(""); }} placeholder="Search products, makers, materials…" />{search ? <button type="button" onClick={() => { setActiveCollection(null); setSearch(""); setActiveHotSearch("All"); }} aria-label="Clear search"><X size={18} /></button> : null}<button className={category !== "All" || sort !== "recommended" || activeCollection ? "discovery-search-filter active" : "discovery-search-filter"} type="button" onClick={() => setFiltersOpen(true)} aria-label="Filter and sort products"><SlidersHorizontal size={20} /></button></div>
           <nav className="discovery-hot-searches" aria-label="Popular searches">{hotSearches.map((item) => <button className={activeHotSearch === item.label ? "active" : ""} key={item.label} type="button" onClick={() => { setActiveCollection(null); setCategory("All"); setSearch(item.query); setActiveHotSearch(item.label); }}>{item.label}</button>)}</nav>
@@ -125,16 +124,15 @@ export function DiscoveryExperience() {
             {showCollections && index === 6 ? <CollectionCard collection={productCollections[1]} onSelect={selectCollection} /> : null}
           </Fragment>)}
         </div>
-        {filtered.length === 0 ? <div className="empty-state"><h3>No exact piece yet.</h3><p>Ask the agent to widen the search without losing your commercial constraints.</p><button className="ghost-button" onClick={() => setAgentOpen(true)} type="button">Ask the agent</button></div> : null}
+        {filtered.length === 0 ? <div className="empty-state"><h3>No exact piece yet.</h3><p>Ask the agent to widen the search without losing your commercial constraints.</p><button className="ghost-button" onClick={() => openAgent({ goal: `Find alternatives for “${search || category}” without losing my requirements.`, contextLabel: "Marketplace search" })} type="button">Ask the agent</button></div> : null}
       </section>
 
-      {focus ? <ProductFocusView focus={focus} onClose={() => setFocus(null)} onAskAgent={(product) => { setFocus(null); setAgentProduct(product); setAgentOpen(true); }} /> : null}
-      <AgentPanel key={agentProduct?.id ?? "discover"} open={agentOpen} onClose={() => setAgentOpen(false)} initialProduct={agentProduct} />
+      {focus ? <ProductFocusView focus={focus} onClose={() => setFocus(null)} /> : null}
     </main>
   );
 }
 
-function ProductFocusView({ focus, onClose, onAskAgent }: { focus: ProductFocus; onClose: () => void; onAskAgent: (product: Product) => void }) {
+function ProductFocusView({ focus, onClose }: { focus: ProductFocus; onClose: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const product = focus.product;
   const seller = getStoreBySlug(makerSlug(product.makerName));
@@ -182,7 +180,7 @@ function ProductFocusView({ focus, onClose, onAskAgent }: { focus: ProductFocus;
           </dl>
           {seller ? <section className="product-focus-seller"><div className={`product-focus-seller-avatar accent-bg-${seller.accent}`}>{seller.initials}</div><div className="product-focus-seller-copy"><span><ShieldCheck size={15} /> Verified workshop</span><h3><Link href={`/app/stores/${seller.slug}`}>{seller.name} <ArrowUpRight size={17} /></Link></h3><p>{seller.story}</p><div><span><MapPin size={15} /> {seller.province}</span><span><Star size={15} fill="currentColor" /> {seller.rating} · {seller.reviews} reviews</span><span><Check size={15} /> {seller.onTimeRate}% on-time</span></div></div></section> : null}
           <div className="product-focus-actions">
-            <button className="gradient-stroke-button" type="button" onClick={() => onAskAgent(product)}><Sparkles size={17} /> Customize with agent</button>
+            <Link className="gradient-stroke-button" href={`/app/products/${product.slug}?customize=1`}><Sparkles size={17} /> Customize with agent</Link>
           </div>
         </div>
       </article>

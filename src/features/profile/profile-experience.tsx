@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import { ProductCard } from "@/src/components/product-card";
 import { SiteHeader } from "@/src/components/site-header";
-import { AgentPanel } from "@/src/features/agent/agent-panel";
 import { getStoreProducts, stores } from "@/src/data/stores";
 import { useFollowedStores } from "@/src/hooks/use-followed-stores";
 
@@ -27,7 +26,6 @@ const defaultProfile: EditableProfile = {
 };
 
 export function ProfileExperience() {
-  const [agentOpen, setAgentOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [profile, setProfile] = useState<EditableProfile>(defaultProfile);
@@ -63,7 +61,7 @@ export function ProfileExperience() {
 
   return (
     <main>
-      <div className="static-header-wrap"><SiteHeader onOpenAgent={() => setAgentOpen(true)} /></div>
+      <div className="static-header-wrap"><SiteHeader /></div>
       <section className="profile-page">
         <header className="profile-page-hero">
           <div className="profile-page-avatar">{initials}</div>
@@ -93,7 +91,6 @@ export function ProfileExperience() {
       </section>
 
       {settingsOpen ? <SettingsPanel email={profile.email} onClose={() => setSettingsOpen(false)} saved={settingsSaved} onSave={() => { setSettingsSaved(true); window.setTimeout(() => setSettingsSaved(false), 1500); }} /> : null}
-      <AgentPanel open={agentOpen} onClose={() => setAgentOpen(false)} />
     </main>
   );
 }

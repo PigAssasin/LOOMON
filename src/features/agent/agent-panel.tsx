@@ -1,156 +1,223 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
-import { ArrowLeft, Check, ExternalLink, Send, Sparkles, Trash2, UploadCloud, WalletCards, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { History, MessageSquarePlus, PackageCheck, Send, ShieldCheck, Sparkles, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Product } from "@/src/domain/product";
+import type { AgentPageContext } from "@/src/features/agent/agent-provider";
 import { products } from "@/src/data/products";
 import { formatMoney } from "@/src/lib/money";
 import { recommendProducts } from "@/src/lib/recommend-products";
 
-type Stage = "discover" | "requirements" | "invoice" | "paying" | "paid";
+type ChatAction = "orders" | "profile";
+type ChatMessage = {
+  id: string;
+  role: "assistant" | "user";
+  text: string;
+  action?: ChatAction;
+  productSlugs?: string[];
+  context?: string;
+};
+type ChatThread = { id: string; title: string; createdAt: number; updatedAt: number; messages: ChatMessage[] };
 
-interface QuoteInput {
-  quantity: number;
-  finish: string;
-  logo: boolean;
-  deadline: string;
-  note: string;
+const THREADS_KEY = "loomon-agent-threads-v1";
+const ACTIVE_THREAD_KEY = "loomon-agent-active-thread-v1";
+
+function id(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function AgentPanel({ open, onClose, initialProduct }: { open: boolean; onClose: () => void; initialProduct?: Product }) {
-  const [stage, setStage] = useState<Stage>(initialProduct ? "requirements" : "discover");
-  const [query, setQuery] = useState("Tôi cần quà cho 50 khách VIP, có logo và giao trong 30 ngày");
-  const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(initialProduct);
-  const [recommendations, setRecommendations] = useState<Product[]>([]);
-  const [quote, setQuote] = useState<QuoteInput>({ quantity: initialProduct?.minimumOrderQuantity ?? 50, finish: initialProduct?.finishes[0] ?? "Maker's recommendation", logo: false, deadline: "", note: "" });
-  const [logoFile, setLogoFile] = useState<{ name: string; url: string } | null>(null);
+function createThread(context: AgentPageContext): ChatThread {
+  const now = Date.now();
+  return {
+    id: id("thread"),
+    title: "New conversation",
+    createdAt: now,
+    updatedAt: now,
+    messages: [{
+      id: id("message"),
+      role: "assistant",
+      text: `Hi — I’m your personal LOOMON agent. I can help with products, orders, payments and profile details. You’re currently on ${context.label}, so I’ll use that context automatically.`,
+      context: context.label,
+    }],
+  };
+}
 
-  const estimate = useMemo(() => (selectedProduct?.priceFrom ?? 0) * quote.quantity, [selectedProduct, quote.quantity]);
-  const deposit = estimate * 0.4;
+function replyTo(input: string, context: AgentPageContext): Omit<ChatMessage, "id" | "role"> {
+  const normalized = input.toLowerCase();
+  const isVietnamese = /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]|\b(tôi|mình|đơn|hàng|giúp|tìm|thanh toán)\b/i.test(input);
+  const here = context.detail ? `${context.label} (${context.detail})` : context.label;
 
-  if (!open) return null;
+  if (/find|search|recommend|compare|gift|product|tìm|gợi ý|so sánh|quà|sản phẩm/.test(normalized)) {
+    const matches = recommendProducts(products, input, 3);
+    return {
+      text: isVietnamese
+        ? `Mình đã tìm trong catalog và ưu tiên lựa chọn phù hợp với yêu cầu của bạn. Mở sản phẩm để xem chi tiết; phần tải ảnh và tạo mẫu sẽ bắt đầu tại “Customize with agent”.`
+        : `I found the closest catalog matches. Open a product to review it; image upload and preview creation begin only from “Customize with agent”.`,
+      productSlugs: matches.map((product) => product.slug),
+    };
+  }
+  if (/order|đơn|delivery|shipping|status|payment|pay|thanh toán|giao hàng/.test(normalized)) {
+    return {
+      text: isVietnamese
+        ? `Mình đang dùng ngữ cảnh ${here}. Bạn có thể mở Orders để xem mốc tiếp theo, khoản thanh toán và việc đang chờ buyer hoặc seller xử lý.`
+        : `I’m using the context from ${here}. Open Orders to review the next milestone, payment and whether the buyer or seller needs to act.`,
+      action: "orders",
+    };
+  }
+  if (/profile|email|address|wallet|địa chỉ|hồ sơ|ví|thông báo/.test(normalized)) {
+    return {
+      text: isVietnamese
+        ? "Mình có thể hỗ trợ kiểm tra hồ sơ, địa chỉ giao hàng, email nhắc đơn và ví đang kết nối. Mọi thay đổi quan trọng vẫn cần bạn xem lại trước khi lưu."
+        : "I can help review your profile, delivery address, order-reminder email and connected wallet. You’ll still review important changes before they are saved.",
+      action: "profile",
+    };
+  }
+  return {
+    text: isVietnamese
+      ? `Mình đã hiểu. Hiện bạn đang ở ${here}; mình sẽ dùng ngữ cảnh này xuyên suốt. Bạn muốn mình tìm thông tin, kiểm tra đơn hàng hay hỗ trợ hồ sơ?`
+      : `Understood. You’re currently on ${here}, and I’ll keep that context throughout this conversation. Should I find information, check an order or help with your profile?`,
+  };
+}
 
-  function runSearch() {
-    setRecommendations(recommendProducts(products, query));
+export function AgentPanel({
+  open,
+  onClose,
+  initialProduct,
+  initialGoal,
+  contextLabel,
+  requestId,
+  pageContext,
+}: {
+  open: boolean;
+  onClose: () => void;
+  initialProduct?: Product;
+  initialGoal?: string;
+  contextLabel?: string;
+  requestId?: number;
+  pageContext: AgentPageContext;
+}) {
+  const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [activeId, setActiveId] = useState("");
+  const [hydrated, setHydrated] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [typing, setTyping] = useState(false);
+  const processedRequest = useRef<number | undefined>(undefined);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const effectiveContext = useMemo<AgentPageContext>(() => ({
+    ...pageContext,
+    label: contextLabel ?? pageContext.label,
+    detail: initialProduct ? `${initialProduct.category} · ${initialProduct.makerName} · from ${initialProduct.priceFrom} USDC` : pageContext.detail,
+  }), [contextLabel, initialProduct, pageContext]);
+
+  const activeThread = threads.find((thread) => thread.id === activeId) ?? threads[0];
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      try {
+        const stored = JSON.parse(localStorage.getItem(THREADS_KEY) ?? "[]") as ChatThread[];
+        const next = stored.length ? stored : [createThread(pageContext)];
+        const storedActive = localStorage.getItem(ACTIVE_THREAD_KEY);
+        setThreads(next);
+        setActiveId(next.some((thread) => thread.id === storedActive) ? storedActive! : next[0].id);
+      } catch {
+        const next = createThread(pageContext);
+        setThreads([next]);
+        setActiveId(next.id);
+      }
+      setHydrated(true);
+    });
+    // Conversation storage is hydrated once; route context updates independently.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated || !threads.length) return;
+    localStorage.setItem(THREADS_KEY, JSON.stringify(threads));
+    localStorage.setItem(ACTIVE_THREAD_KEY, activeId);
+  }, [activeId, hydrated, threads]);
+
+  useEffect(() => {
+    if (!hydrated || !requestId || processedRequest.current === requestId) return;
+    processedRequest.current = requestId;
+    const prompt = initialGoal ?? (initialProduct ? `Help me understand ${initialProduct.title} before I customize it.` : "");
+    if (prompt) sendMessage(prompt);
+    // sendMessage intentionally uses the newest route context for contextual entry points.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, requestId]);
+
+  useEffect(() => {
+    if (open) chatEndRef.current?.scrollIntoView({ block: "end" });
+  }, [activeThread?.messages, open, typing]);
+
+  function updateThread(threadId: string, updater: (thread: ChatThread) => ChatThread) {
+    setThreads((current) => current.map((thread) => thread.id === threadId ? updater(thread) : thread));
   }
 
-  function chooseProduct(product: Product) {
-    setSelectedProduct(product);
-    setQuote((current) => ({ ...current, quantity: Math.max(current.quantity, product.minimumOrderQuantity), finish: product.finishes[0] }));
-    setStage("requirements");
+  function sendMessage(value = chatInput) {
+    const clean = value.trim();
+    if (!clean || typing || !activeThread) return;
+    const targetThreadId = activeThread.id;
+    const userMessage: ChatMessage = { id: id("user"), role: "user", text: clean, context: effectiveContext.label };
+    const now = Date.now();
+    updateThread(targetThreadId, (thread) => ({
+      ...thread,
+      title: thread.messages.filter((message) => message.role === "user").length === 0 ? clean.slice(0, 42) : thread.title,
+      updatedAt: now,
+      messages: [...thread.messages, userMessage],
+    }));
+    setChatInput("");
+    setTyping(true);
+    window.setTimeout(() => {
+      const reply = replyTo(clean, effectiveContext);
+      updateThread(targetThreadId, (thread) => ({ ...thread, updatedAt: Date.now(), messages: [...thread.messages, { id: id("assistant"), role: "assistant", ...reply, context: effectiveContext.label }] }));
+      setTyping(false);
+    }, 520);
   }
 
-  function simulatePayment() {
-    setStage("paying");
-    window.setTimeout(() => setStage("paid"), 1400);
+  function startNewChat() {
+    const next = createThread(effectiveContext);
+    setThreads((current) => [next, ...current]);
+    setActiveId(next.id);
+    setHistoryOpen(false);
+    setChatInput("");
   }
 
-  function selectLogo(file: File | undefined) {
-    if (!file) return;
-    if (logoFile) URL.revokeObjectURL(logoFile.url);
-    setLogoFile({ name: file.name, url: URL.createObjectURL(file) });
-    setQuote((current) => ({ ...current, logo: true }));
-  }
-
-  function removeLogo() {
-    if (logoFile) URL.revokeObjectURL(logoFile.url);
-    setLogoFile(null);
-    setQuote((current) => ({ ...current, logo: false }));
-  }
+  if (!open || !activeThread) return null;
 
   return (
-    <div className="agent-layer" role="dialog" aria-modal="true" aria-label="LOOMON commerce agent">
+    <div className="agent-layer" role="dialog" aria-modal="true" aria-label="LOOMON personal agent">
       <button className="agent-scrim" onClick={onClose} aria-label="Close agent" />
-      <aside className="agent-panel">
+      <aside className="agent-panel agent-panel--chat-only">
         <header className="agent-header">
-          <div className="agent-title"><span className="agent-spark"><Sparkles size={17} /></span><div><strong>Maker Agent</strong><small>Discovery to deposit</small></div></div>
-          <button className="icon-button" onClick={onClose} type="button" aria-label="Close agent"><X size={22} /></button>
+          <div className="agent-title"><span className="agent-spark"><Sparkles size={17} /></span><div><strong>Personal agent</strong><small>Products, orders, profile and payment</small></div></div>
+          <div className="agent-header-actions"><button className="icon-button" onClick={() => setHistoryOpen((value) => !value)} type="button" aria-label="Conversation history"><History size={20} /></button><button className="icon-button" onClick={startNewChat} type="button" aria-label="New conversation"><MessageSquarePlus size={20} /></button><button className="icon-button" onClick={onClose} type="button" aria-label="Close agent"><X size={22} /></button></div>
         </header>
 
-        {stage === "discover" ? (
-          <div className="agent-body">
-            <p className="agent-message">Tell me the occasion, quantity, budget or deadline. I’ll only show pieces that can realistically fit.</p>
-            <label className="agent-composer">
-              <span className="sr-only">What are you looking for?</span>
-              <textarea value={query} onChange={(event) => setQuery(event.target.value)} rows={4} />
-              <button onClick={runSearch} type="button" aria-label="Search products"><Send size={18} /></button>
-            </label>
-            {recommendations.length > 0 ? (
-              <div className="agent-results">
-                <p className="bracket-label">{`{ 3 feasible matches }`}</p>
-                {recommendations.map((product) => (
-                  <button className="agent-result" onClick={() => chooseProduct(product)} type="button" key={product.id}>
-                    <span className={`result-dot accent-bg-${product.accent}`} />
-                    <span><strong>{product.title}</strong><small>MOQ {product.minimumOrderQuantity} · {product.leadTimeMinDays}–{product.leadTimeMaxDays} days</small></span>
-                    <em>{formatMoney(product.priceFrom)}</em>
-                  </button>
-                ))}
-              </div>
-            ) : null}
+        <div className="assistant-chat">
+          <div className="assistant-chat-context"><span><i /> Context: {effectiveContext.label}</span><small>{effectiveContext.kind}</small></div>
+
+          {historyOpen ? <section className="agent-history" aria-label="Previous conversations">
+            <header><div><strong>Conversations</strong><small>Saved on this device</small></div><button type="button" onClick={startNewChat}><MessageSquarePlus size={16} /> New chat</button></header>
+            <div>{threads.toSorted((a, b) => b.updatedAt - a.updatedAt).map((thread) => <button className={thread.id === activeId ? "active" : ""} type="button" key={thread.id} onClick={() => { setActiveId(thread.id); setHistoryOpen(false); }}><MessageSquarePlus size={16} /><span><strong>{thread.title}</strong><small>{new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(thread.updatedAt)}</small></span></button>)}</div>
+          </section> : null}
+
+          <div className="assistant-chat-thread" aria-live="polite">
+            {activeThread.messages.map((message) => <div className={`chat-message chat-message--${message.role}`} key={message.id}>
+              {message.role === "assistant" ? <span className="chat-avatar"><Sparkles size={14} /></span> : null}
+              <div><p>{message.text}</p>{message.context ? <small className="chat-message-context">From {message.context}</small> : null}{message.productSlugs?.length ? <div className="chat-product-results">{message.productSlugs.map((slug) => { const product = products.find((item) => item.slug === slug); return product ? <Link href={`/app/products/${product.slug}`} onClick={onClose} key={product.slug}><span className={`result-dot accent-bg-${product.accent}`} /><span><strong>{product.title}</strong><small>{product.makerName} · MOQ {product.minimumOrderQuantity}</small></span><em>{formatMoney(product.priceFrom)}</em></Link> : null; })}</div> : null}{message.action === "orders" ? <Link className="chat-action-link" href="/app/orders" onClick={onClose}><PackageCheck size={15} /> Open Orders</Link> : null}{message.action === "profile" ? <Link className="chat-action-link" href="/app/profile" onClick={onClose}>Open Profile</Link> : null}</div>
+            </div>)}
+            {typing ? <div className="chat-message chat-message--assistant"><span className="chat-avatar"><Sparkles size={14} /></span><div className="chat-typing" aria-label="Agent is typing"><i /><i /><i /></div></div> : null}
+            <div ref={chatEndRef} />
           </div>
-        ) : null}
 
-        {stage === "requirements" && selectedProduct ? (
-          <div className="agent-body quote-requirements">
-            <button className="back-link" onClick={() => setStage("discover")} type="button"><ArrowLeft size={16} /> Back to search</button>
-            <div className="quote-heading"><p className="bracket-label">{`{ Quote requirements }`}</p><h2>{selectedProduct.title}</h2><p className="muted-copy">Confirm the order details. The agent will prepare everything for the maker.</p></div>
-            <div className="form-grid">
-              <label><span>Quantity</span><input type="number" min={selectedProduct.minimumOrderQuantity} value={quote.quantity} onChange={(event) => setQuote({ ...quote, quantity: Number(event.target.value) })} /></label>
-              <label><span>Finish</span><select value={quote.finish} onChange={(event) => setQuote({ ...quote, finish: event.target.value })}>{selectedProduct.finishes.map((finish) => <option key={finish}>{finish}</option>)}</select></label>
-              <label><span>Required by</span><input type="date" value={quote.deadline} onChange={(event) => setQuote({ ...quote, deadline: event.target.value })} /></label>
-              <div className="quote-logo field-wide">
-                <div className="quote-field-heading"><span>Custom logo</span><small>PNG, JPG or SVG · maximum 5 MB</small></div>
-                {logoFile ? (
-                  <div className="quote-logo-file">
-                    <span className="quote-logo-preview"><Image src={logoFile.url} alt="Uploaded custom logo" width={64} height={64} unoptimized /></span>
-                    <span><strong>{logoFile.name}</strong><small>Ready for the maker</small></span>
-                    <button type="button" onClick={removeLogo} aria-label="Remove custom logo"><Trash2 size={17} /></button>
-                  </div>
-                ) : (
-                  <label className="quote-logo-upload">
-                    <span><UploadCloud size={21} /></span>
-                    <span><strong>Upload your logo</strong><small>We’ll place it on the product mockup.</small></span>
-                    <em>Choose file</em>
-                    <input type="file" accept="image/png,image/jpeg,image/svg+xml" onChange={(event) => selectLogo(event.target.files?.[0])} />
-                  </label>
-                )}
-              </div>
-              <label className="field-wide"><span>Notes for the maker</span><textarea value={quote.note} onChange={(event) => setQuote({ ...quote, note: event.target.value })} placeholder="Packaging, message card, delivery context…" rows={3} /></label>
-            </div>
-            <div className="quote-preview"><span><small>Estimated order</small><strong>{quote.quantity} pieces</strong></span><strong>{formatMoney(estimate)}</strong><small>Starting estimate · maker confirms the final quote before payment</small></div>
-            <button className="gradient-stroke-button full-width" type="button" onClick={() => setStage("invoice")}>Prepare deposit invoice</button>
-          </div>
-        ) : null}
-
-        {stage === "invoice" && selectedProduct ? (
-          <div className="agent-body">
-            <button className="back-link" onClick={() => setStage("requirements")} type="button"><ArrowLeft size={16} /> Edit requirements</button>
-            <p className="bracket-label">{`{ Deposit invoice }`}</p>
-            <h2>{formatMoney(deposit)}</h2>
-            <p className="muted-copy">40% deposit to reserve the maker’s production window.</p>
-            <dl className="invoice-lines">
-              <div><dt>Piece</dt><dd>{selectedProduct.title}</dd></div>
-              <div><dt>Quantity</dt><dd>{quote.quantity}</dd></div>
-              <div><dt>Finish</dt><dd>{quote.finish}</dd></div>
-              <div><dt>Logo</dt><dd>{logoFile ? logoFile.name : quote.logo ? "Requested" : "No"}</dd></div>
-              <div><dt>Estimated total</dt><dd>{formatMoney(estimate)}</dd></div>
-              <div className="invoice-total"><dt>Deposit due</dt><dd>{formatMoney(deposit)}</dd></div>
-            </dl>
-            <div className="wallet-summary"><WalletCards size={20} /><span><strong>Arc Wallet</strong><small>684.20 USDC · network fee sponsored</small></span><button type="button">Change</button></div>
-            <button className="gradient-stroke-button full-width" type="button" onClick={simulatePayment}>Confirm {formatMoney(deposit)} deposit</button>
-            <p className="wallet-note">Demo payment adapter. Architecture is ready for a direct Arc USDC transfer without a custom contract.</p>
-          </div>
-        ) : null}
-
-        {stage === "paying" ? (
-          <div className="agent-state"><span className="payment-loader" /><p className="bracket-label">{`{ Arc Testnet }`}</p><h2>Confirming your deposit.</h2><p>Arc finalizes included transactions in a single confirmation.</p></div>
-        ) : null}
-
-        {stage === "paid" && selectedProduct ? (
-          <div className="agent-state agent-state--paid"><span className="success-mark"><Check size={34} /></span><p className="bracket-label">{`{ Deposit confirmed }`}</p><h2>Your production window is held.</h2><p>{selectedProduct.makerName} will review the final details. I’ll remind both sides about the next action.</p><div className="paid-actions"><Link href="/app/orders/demo-order" className="gradient-stroke-button">View order</Link><a className="ghost-button" href="https://testnet.arcscan.app" target="_blank" rel="noreferrer">ArcScan <ExternalLink size={15} /></a></div></div>
-        ) : null}
+          {activeThread.messages.length < 3 ? <div className="assistant-suggestions" aria-label="Suggested messages"><button type="button" onClick={() => sendMessage("Find a meaningful gift under 100 USDC.")}>Find a product</button><button type="button" onClick={() => sendMessage("Check my active order and next action.")}>Check my order</button><button type="button" onClick={() => sendMessage("Help me review my profile and delivery details.")}>Review profile</button></div> : null}
+          <form className="assistant-chat-composer" onSubmit={(event) => { event.preventDefault(); sendMessage(); }}>
+            <textarea aria-label="Message your personal agent" placeholder={`Ask about ${effectiveContext.label}…`} rows={2} value={chatInput} onChange={(event) => setChatInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendMessage(); } }} />
+            <div><span><ShieldCheck size={14} /> Context follows you across LOOMON</span><button type="submit" disabled={!chatInput.trim() || typing} aria-label="Send message"><Send size={18} /></button></div>
+          </form>
+        </div>
       </aside>
     </div>
   );
