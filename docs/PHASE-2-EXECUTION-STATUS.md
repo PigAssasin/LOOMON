@@ -2,6 +2,19 @@
 
 Ngày cập nhật: 2026-07-23
 
+Git checkpoint:
+
+- branch: `codex/phase-2-agent-commerce`
+- latest pushed commit: `88d8db4`
+- PR link thủ công: `https://github.com/PigAssasin/LOOMON/pull/new/codex/phase-2-agent-commerce`
+
+Vercel checkpoint:
+
+- production: `https://loomon.vercel.app`
+- deployment URL: `https://loomon-nthuyj2zv-pigassasins-projects.vercel.app`
+- `/` checked: HTTP 200
+- `/app` checked: HTTP 200
+
 ## Scope đã chốt
 
 LOOMON hiện đi theo hướng custom souvenir demo trước marketplace:
