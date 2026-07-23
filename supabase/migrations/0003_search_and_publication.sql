@@ -92,7 +92,7 @@ as $$
     pp.lead_time_max_days,
     pp.price_from,
     pp.currency_code,
-    ts_rank(pd.fts, websearch_to_tsquery('simple', extensions.unaccent(query_text)))
+    ts_rank(pd.fts, websearch_to_tsquery('simple', extensions.unaccent(query_text))) as keyword_rank
   from public.published_products pp
   join search.product_documents pd on pd.product_version_id = pp.product_version_id and pd.locale = pp.locale
   where pp.locale = requested_locale
@@ -100,7 +100,7 @@ as $$
     and (maximum_unit_amount is null or pp.price_from <= maximum_unit_amount)
     and (requested_quantity is null or pp.minimum_order_quantity <= requested_quantity)
     and (maximum_lead_time_days is null or pp.lead_time_max_days <= maximum_lead_time_days)
-  order by keyword_rank desc, pp.id desc
+  order by ts_rank(pd.fts, websearch_to_tsquery('simple', extensions.unaccent(query_text))) desc, pp.id desc
   limit least(greatest(result_limit, 1), 50)
 $$;
 
