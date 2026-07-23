@@ -180,11 +180,18 @@ export async function POST(request: Request) {
       }),
     });
 
-    if (!response.ok) return NextResponse.json(fallback);
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      console.warn("LOOMON_AGENT_GEMINI_HTTP_ERROR", response.status, errorText.slice(0, 300));
+      return NextResponse.json(fallback);
+    }
 
     const payload = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
     const rawText = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("").trim();
-    if (!rawText) return NextResponse.json(fallback);
+    if (!rawText) {
+      console.warn("LOOMON_AGENT_GEMINI_EMPTY_RESPONSE");
+      return NextResponse.json(fallback);
+    }
 
     const parsed = extractJson(rawText);
     const allowedSlugs = new Set(products.map((product) => product.slug));
@@ -195,7 +202,8 @@ export async function POST(request: Request) {
     const text = typeof parsed.text === "string" && parsed.text.trim() ? parsed.text.trim().slice(0, 1_500) : fallback.text;
 
     return NextResponse.json({ source: "gemini", text, action, productSlugs } satisfies AgentChatResponse);
-  } catch {
+  } catch (error) {
+    console.warn("LOOMON_AGENT_GEMINI_EXCEPTION", error instanceof Error ? error.message : "unknown");
     return NextResponse.json(fallback);
   }
 }
