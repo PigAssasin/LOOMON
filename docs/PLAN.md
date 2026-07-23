@@ -1057,3 +1057,6 @@ Pause feature-level frontend work. Execute the gates in `docs/FRONTEND_FREEZE.md
 3. Write the executable Arc contract specification and Foundry test harness.
 4. Implement the contract on Arc Testnet only after the lifecycle and authority model are approved.
 5. Build the backend event projection and then connect the frozen UI through typed adapters.
+Current corrective workflow plan:
+
+- `docs/PRODUCT-LIFECYCLE-INVENTORY-PLAN.md` — real Supabase product creation, draft deletion, archive, pause, out-of-stock, inventory, media cleanup and seller management.

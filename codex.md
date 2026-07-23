@@ -160,3 +160,11 @@ These rules are retained for the later marketplace phase. During the custom-souv
 - Collections have normalized IDs, titles, membership lists, and dedicated banner assets separate from product photography.
 - Collection banners must be produced for their target horizontal aspect ratio and rendered with preserved proportions; never stretch a product image to fill a collection frame.
 - Selecting a collection must return only its declared product membership and must remain compatible with catalog search, category filters, and agent recommendations.
+## 0. Mandatory plan-first workflow
+
+- Before any implementation, database migration, contract change, deployment, or destructive operation, create or update a step-by-step plan under `docs/`.
+- Compare the task against `docs/PLAN.md`, the current authoritative phase plan, and this rulebook before writing implementation code.
+- Record current behavior, target behavior, checkpoints, tests, deployment order, rollback, and exit gates in the task plan.
+- Present the plan and the important product decisions to the user before implementation begins.
+- Do not start implementation until the user approves the plan, unless the user explicitly instructs execution in the same request after reviewing an already-current plan.
+- During implementation, update checkpoint status and verification evidence in the plan instead of relying on chat history.
