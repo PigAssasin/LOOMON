@@ -15,6 +15,15 @@ Vercel checkpoint:
 - `/` checked: HTTP 200
 - `/app` checked: HTTP 200
 
+Agent checkpoint:
+
+- Personal Agent chat now calls `/api/agent/chat`.
+- `/api/agent/chat` uses `GEMINI_API_KEY` with `GEMINI_TEXT_MODEL` when configured.
+- The agent is scoped to LOOMON only: product discovery, customization guidance, orders, wallet/payment prep, profile and buyer-seller message drafts.
+- The agent redirects off-topic questions back into the app flow.
+- Image upload/render remains outside personal chat and starts from product detail → `Customize with agent`.
+- Local fallback remains available when Gemini is missing or unavailable.
+
 ## Scope đã chốt
 
 LOOMON hiện đi theo hướng custom souvenir demo trước marketplace:
