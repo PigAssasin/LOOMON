@@ -13,3 +13,5 @@ contracts/out/
 contracts/cache/
 .codex-tmp/
 outputs/
+
+.vercel
