@@ -145,7 +145,7 @@ export function QuoteRequestExperience({ product }: { product: Product }) {
     const supabase = createClient();
     if (!supabase) {
       setSubmitState("error");
-      setError("Supabase is not configured for this deployment.");
+      setError("We could not verify your wallet. Try again in a moment.");
       return;
     }
 
@@ -305,7 +305,7 @@ export function QuoteRequestExperience({ product }: { product: Product }) {
               <button ref={submitButtonRef} className="gradient-stroke-button full-width" type="button" disabled={!canSubmit} onClick={submitQuote}>
                 {isBusy ? <><LoaderCircle className="quote-spinner" size={18} /> {submitState === "signing" ? "Confirm in wallet" : submitState === "uploading" ? "Securing brief" : "Sending request"}</> : isConnected ? "Submit quote request" : <><WalletCards size={18} /> Connect wallet to submit</>}
               </button>
-              <p className="quote-security-note"><ShieldCheck size={15} /> Your wallet signature creates the buyer identity used by Supabase RLS. It does not authorize payment.</p>
+              <p className="quote-security-note"><ShieldCheck size={15} /> You are sending a request. Nothing is charged.</p>
             </>}
           </section>
         </div>
