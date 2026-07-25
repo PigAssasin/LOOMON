@@ -5,12 +5,14 @@ export type CustomizationStatus = "idle" | "rendering" | "ready" | "error";
 export type CustomizationPreview = { url: string; label: string; backgroundPosition?: string };
 
 export type CustomizationSession = {
-  schemaVersion: 4;
+  schemaVersion: 5;
   productSlug: string;
   mode: CustomizationMode;
   intent: CustomizationIntent;
   status: CustomizationStatus;
   notes: string;
+  quantity: number;
+  requiredBy: string;
   prompt?: string;
   file?: File;
   fileName?: string;
@@ -22,6 +24,57 @@ export type CustomizationSession = {
   renderDemo: boolean;
   updatedAt: number;
 };
+
+export function createEmptyCustomizationSession(
+  productSlug: string,
+  minimumOrderQuantity: number,
+): CustomizationSession {
+  return {
+    schemaVersion: 5,
+    productSlug,
+    mode: "choose",
+    intent: "apply_artwork",
+    status: "idle",
+    notes: "",
+    quantity: minimumOrderQuantity,
+    requiredBy: "",
+    previews: [],
+    renderDemo: false,
+    updatedAt: Date.now(),
+  };
+}
+
+export function normalizeCustomizationSession(
+  productSlug: string,
+  minimumOrderQuantity: number,
+  stored?: CustomizationSession,
+): CustomizationSession {
+  const empty = createEmptyCustomizationSession(productSlug, minimumOrderQuantity);
+  if (!stored) return empty;
+  const legacy = stored as CustomizationSession & {
+    schemaVersion?: number;
+    prompt?: string;
+    quantity?: number;
+    requiredBy?: string;
+  };
+  const legacyPrompt = legacy.prompt ?? "";
+  const legacyDefault = "Place this artwork naturally on the product. Keep the artwork proportions and colors faithful.";
+  return {
+    ...empty,
+    ...stored,
+    schemaVersion: 5,
+    productSlug,
+    mode: (stored.mode as string) === "manual" ? "choose" : (stored.mode ?? "choose"),
+    intent: stored.intent ?? "apply_artwork",
+    status: stored.status ?? "idle",
+    notes: stored.notes ?? (legacyPrompt && legacyPrompt !== legacyDefault ? legacyPrompt : ""),
+    quantity: Math.max(minimumOrderQuantity, legacy.quantity ?? minimumOrderQuantity),
+    requiredBy: legacy.requiredBy ?? "",
+    previews: stored.previews ?? [],
+    renderDemo: stored.renderDemo ?? false,
+    renderStartedAt: stored.renderStartedAt ?? (stored.previews?.length ? stored.updatedAt : undefined),
+  };
+}
 
 const DATABASE = "loomon-customization";
 const STORE = "sessions";

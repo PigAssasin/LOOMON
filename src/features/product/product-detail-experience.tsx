@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Check, Clock3, MapPin, PackageCheck, ShieldCheck, Sparkles } from "lucide-react";
 import { useState } from "react";
 import type { Product } from "@/src/domain/product";
@@ -13,7 +12,6 @@ import { makerSlug } from "@/src/data/stores";
 import { ProductCustomizationStudio } from "@/src/features/customization/product-customization-studio";
 
 export function ProductDetailExperience({ product, initialCustomizing = false }: { product: Product; initialCustomizing?: boolean }) {
-  const router = useRouter();
   const { openAgent } = useAgent();
   const [customizing, setCustomizing] = useState(initialCustomizing);
   const openCustomization = () => {
@@ -27,10 +25,6 @@ export function ProductDetailExperience({ product, initialCustomizing = false }:
     const url = new URL(window.location.href);
     url.searchParams.delete("customize");
     window.history.replaceState({}, "", url);
-  };
-  const continueCustomization = () => {
-    closeCustomization();
-    router.push(`/app/quotes/new?product=${encodeURIComponent(product.slug)}`);
   };
 
   return (
@@ -65,7 +59,6 @@ export function ProductDetailExperience({ product, initialCustomizing = false }:
         product={product}
         open={customizing}
         onClose={closeCustomization}
-        onContinue={continueCustomization}
       />
     </main>
   );

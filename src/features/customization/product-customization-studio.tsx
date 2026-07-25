@@ -1,53 +1,26 @@
 "use client";
 
 import Image from "next/image";
-import { ArrowLeft, Check, FileImage, Sparkles, Type, UploadCloud, WandSparkles, X } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, Check, FileImage, LoaderCircle, ShieldCheck, Sparkles, Type, UploadCloud, WalletCards, WandSparkles, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ProductVisual } from "@/src/components/product-visual";
 import type { Product } from "@/src/domain/product";
 import {
+  createEmptyCustomizationSession,
   loadCustomization,
+  normalizeCustomizationSession,
   saveCustomization,
   type CustomizationIntent,
   type CustomizationSession,
 } from "@/src/features/customization/customization-storage";
+import { formatMoney } from "@/src/lib/money";
+import { useOrderRequestSubmission } from "@/src/features/quote/use-order-request-submission";
 
-function emptySession(product: Product): CustomizationSession {
-  return {
-    schemaVersion: 4,
-    productSlug: product.slug,
-    mode: "choose",
-    intent: "apply_artwork",
-    status: "idle",
-    notes: "",
-    previews: [],
-    renderDemo: false,
-    updatedAt: Date.now(),
-  };
-}
-
-function normalizeSession(product: Product, stored?: CustomizationSession): CustomizationSession {
-  if (!stored) return emptySession(product);
-  if ((stored as { schemaVersion?: number }).schemaVersion !== 4) {
-    const legacyPrompt = (stored as { prompt?: string }).prompt ?? "";
-    const legacyDefault = "Place this artwork naturally on the product. Keep the artwork proportions and colors faithful.";
-    return {
-      ...emptySession(product),
-      file: stored.file,
-      fileName: stored.fileName,
-      intent: stored.intent ?? "apply_artwork",
-      notes: legacyPrompt && legacyPrompt !== legacyDefault ? legacyPrompt : "",
-    };
-  }
-  const legacyMode = stored.mode as string;
-  return {
-    ...emptySession(product),
-    ...stored,
-    mode: legacyMode === "manual" ? "choose" : stored.mode,
-    intent: stored.intent ?? "apply_artwork",
-    notes: stored.notes ?? "",
-    renderStartedAt: stored.renderStartedAt ?? (stored.previews?.length ? stored.updatedAt : undefined),
-  };
+function tomorrow() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return date.toISOString().slice(0, 10);
 }
 
 async function createProductReference(product: Product): Promise<Blob> {
@@ -78,21 +51,25 @@ export function ProductCustomizationStudio({
   product,
   open,
   onClose,
-  onContinue,
 }: {
   product: Product;
   open: boolean;
   onClose: () => void;
-  onContinue: () => void;
 }) {
-  const [session, setSession] = useState<CustomizationSession>(() => emptySession(product));
+  const [session, setSession] = useState<CustomizationSession>(
+    () => createEmptyCustomizationSession(product.slug, product.minimumOrderQuantity),
+  );
   const [loaded, setLoaded] = useState(false);
   const [sourceUrl, setSourceUrl] = useState("");
   const resumeStarted = useRef(false);
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const order = useOrderRequestSubmission({ product, session });
 
   const persist = useCallback((next: CustomizationSession) => {
     setSession(next);
-    void saveCustomization(next);
+    saveQueue.current = saveQueue.current
+      .catch(() => undefined)
+      .then(() => saveCustomization(next));
   }, []);
 
   const render = useCallback(async (current: CustomizationSession) => {
@@ -132,7 +109,7 @@ export function ProductCustomizationStudio({
     let active = true;
     void loadCustomization(product.slug).then((stored) => {
       if (!active) return;
-      const next = normalizeSession(product, stored);
+      const next = normalizeCustomizationSession(product.slug, product.minimumOrderQuantity, stored);
       setSession(next);
       if (next.file) setSourceUrl(URL.createObjectURL(next.file));
       setLoaded(true);
@@ -185,7 +162,22 @@ export function ProductCustomizationStudio({
       </header>
 
       <div className="custom-studio-body">
-        {session.mode === "choose" ? <section className="custom-setup-step">
+        {order.result ? <section className="custom-order-success" role="status">
+          <span><Check size={29} /></span>
+          <p className="bracket-label">{`{ Order request sent }`}</p>
+          <h2>The maker has your order.</h2>
+          <p>{product.makerName} will review the customization and confirm the final quote before any payment.</p>
+          <dl>
+            <div><dt>Reference</dt><dd>{order.result.projectReference}</dd></div>
+            <div><dt>Status</dt><dd>Waiting for seller</dd></div>
+          </dl>
+          <div className="custom-order-success-actions">
+            <Link className="gradient-stroke-button" href="/app/orders">View orders</Link>
+            <button className="ghost-button" type="button" onClick={onClose}>Close</button>
+          </div>
+        </section> : null}
+
+        {!order.result && session.mode === "choose" ? <section className="custom-setup-step">
           <div className="custom-product-reference"><ProductVisual product={product} /><span>Product reference - shape must stay unchanged</span></div>
           <div className="custom-setup-controls">
             <p className="bracket-label">{`{ Custom brief }`}</p>
@@ -217,18 +209,57 @@ export function ProductCustomizationStudio({
           </div>
         </section> : null}
 
-        {session.mode === "brief" ? <section className={`custom-brief-ready ${selectedPreview ? "custom-preview-submitted" : ""}`}>
+        {!order.result && session.mode === "brief" ? <section className={`custom-brief-ready ${selectedPreview ? "custom-preview-submitted" : ""}`}>
           <span><Check size={27} /></span>
-          <p className="bracket-label">{selectedPreview ? `{ Preview added to maker brief }` : `{ Custom brief saved }`}</p>
-          <h2>Ready for the seller.</h2>
+          <p className="bracket-label">{selectedPreview ? `{ Preview and order details }` : `{ Order details }`}</p>
+          <h2>Review and place your order.</h2>
           {selectedPreview ? <Image src={selectedPreview.url} alt="Selected product preview" width={520} height={520} unoptimized /> : null}
-          <p>{selectedPreview ? <><strong>{selectedPreview.label}</strong> is now the approved visual reference for {product.makerName}.</> : session.intent === "maker_reference" ? <>{session.fileName} will be sent as a separate reference file for {product.makerName}.</> : <>Your maker notes are saved for {product.makerName}. No AI preview is required for this brief.</>} It will travel with the product reference and production instructions.</p>
-          {session.notes ? <p className="custom-saved-notes">{session.notes}</p> : null}
-          <button className="gradient-stroke-button" type="button" onClick={onContinue}>Continue with this brief</button>
+          <p>{selectedPreview ? <><strong>{selectedPreview.label}</strong> will be sent as the approved visual reference.</> : session.intent === "maker_reference" ? <>{session.fileName} will be sent as a separate maker reference.</> : <>No AI preview is required for this order.</>}</p>
+
+          <div className="custom-order-fields">
+            <label>
+              <span>Quantity</span>
+              <input
+                type="number"
+                min={product.minimumOrderQuantity}
+                value={session.quantity}
+                onChange={(event) => persist({ ...session, quantity: Number(event.target.value), updatedAt: Date.now() })}
+              />
+              <small>Minimum {product.minimumOrderQuantity} pieces</small>
+            </label>
+            <label>
+              <span>Needed by <small>Optional</small></span>
+              <input
+                type="date"
+                min={tomorrow()}
+                value={session.requiredBy}
+                onChange={(event) => persist({ ...session, requiredBy: event.target.value, updatedAt: Date.now() })}
+              />
+            </label>
+            <label className="field-wide">
+              <span>Note for the maker</span>
+              <textarea
+                rows={4}
+                value={session.notes}
+                onChange={(event) => persist({ ...session, notes: event.target.value, updatedAt: Date.now() })}
+                placeholder="Placement, packaging, colors or anything the maker should know…"
+              />
+            </label>
+          </div>
+
+          <div className="custom-order-estimate">
+            <span><strong>Starting estimate</strong><small>Nothing is charged now</small></span>
+            <strong>{formatMoney(order.estimate)}</strong>
+          </div>
+          {order.error ? <p className="quote-submit-error" role="alert">{order.error}</p> : null}
+          <button className="gradient-stroke-button full-width" type="button" disabled={!order.canSubmit} onClick={order.placeOrder}>
+            {order.isBusy ? <><LoaderCircle className="quote-spinner" size={18} /> {order.submitState === "connecting" ? "Opening wallet" : order.submitState === "signing" ? "Confirm in wallet" : order.submitState === "uploading" ? "Securing artwork" : "Placing order"}</> : <><WalletCards size={18} /> Place order</>}
+          </button>
+          <p className="quote-security-note"><ShieldCheck size={15} /> The seller reviews this request before any payment.</p>
           <button className="ghost-button" type="button" onClick={() => persist({ ...session, mode: "choose", updatedAt: Date.now() })}>Edit brief</button>
         </section> : null}
 
-        {session.mode === "agent" ? <section className="custom-render-step">
+        {!order.result && session.mode === "agent" ? <section className="custom-render-step">
           {session.status !== "ready" ? <button className="back-link" type="button" onClick={() => persist({ ...session, mode: "choose", status: "idle", updatedAt: Date.now() })}><ArrowLeft size={16} /> Back to custom brief</button> : null}
           <div className="custom-render-heading"><div><p className="bracket-label">{`{ Product-locked render }`}</p><h2>{session.status === "rendering" ? "Applying your design." : session.status === "ready" ? "Choose a product preview." : "Ready to try again."}</h2></div><div className="custom-render-reference"><ProductVisual product={product} /><small>Locked product</small></div></div>
           {session.status === "rendering" ? <><div className="custom-render-loading"><i /><i /><i /></div><p className="custom-render-note">The product shape, material and color are locked. Only the requested artwork or text may change.</p></> : null}

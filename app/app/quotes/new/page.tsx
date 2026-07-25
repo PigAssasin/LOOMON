@@ -1,6 +1,5 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getProductBySlug } from "@/src/data/products";
-import { QuoteRequestExperience } from "@/src/features/quote/quote-request-experience";
 
 export default async function NewQuotePage({
   searchParams,
@@ -11,5 +10,5 @@ export default async function NewQuotePage({
   const product = slug ? getProductBySlug(slug) : undefined;
   if (!product) notFound();
 
-  return <QuoteRequestExperience product={product} />;
+  redirect(`/app/products/${product.slug}?customize=1`);
 }
