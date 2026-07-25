@@ -1,5 +1,8 @@
 project_id = "loomon"
 
+[auth.web3.ethereum]
+enabled = true
+
 [api]
 enabled = true
 port = 54321
@@ -17,8 +20,12 @@ port = 54323
 
 [auth]
 enabled = true
-site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://127.0.0.1:3000/**"]
+site_url = "https://loomon.vercel.app"
+additional_redirect_urls = [
+  "https://loomon.vercel.app/**",
+  "http://localhost:3000/**",
+  "http://127.0.0.1:3000/**",
+]
 
 [storage]
 enabled = true

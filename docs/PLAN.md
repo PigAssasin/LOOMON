@@ -8,6 +8,12 @@ Current authoritative plan: `docs/CUSTOM-SOUVENIR-MVP-PLAN.md`
 
 Current Agent-commerce flow addendum: `docs/AGENT-COMMERCE-FLOW.md`
 
+Current basic buyer/seller completion sequence:
+`docs/BASIC-COMMERCE-COMPLETION-PLAN.md`
+
+Current Arc demo NFT execution sequence:
+`docs/ARC-DEMO-NFT-ORDER-PROOF-PLAN.md`
+
 The marketplace database and contract plans remain future architecture references. They are not the next implementation sequence and must not be executed until the custom-souvenir validation gates pass.
 
 ## 1. Outcome
@@ -19,7 +25,11 @@ Build an upload-first custom souvenir studio where:
 3. The Agent produces concept previews and accepts natural-language revisions to placement, crop, color, text and product choice.
 4. The user approves a production-ready customization snapshot and creates an order.
 5. Supabase stores the canonical asset, customization, preview, order and Agent audit data.
-6. Arc Testnet demonstrates smart-account delegation and USDC custom-order escrow while keeping the interface Web2-simple.
+6. Arc Testnet demonstrates smart-account delegation and USDC custom-order
+   payment while keeping the interface Web2-simple.
+7. After the seller marks the demo order delivered and the buyer explicitly
+   confirms receipt, one non-transferable LOOMON Order Proof NFT is minted to
+   the buyer wallet and shown in Purchased.
 
 The first release proves one complete path:
 

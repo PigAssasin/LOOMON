@@ -11,6 +11,7 @@ test-results/
 *.log
 contracts/out/
 contracts/cache/
+contracts/broadcast/
 .codex-tmp/
 outputs/
 

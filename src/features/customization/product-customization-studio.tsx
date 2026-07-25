@@ -74,7 +74,17 @@ const intentOptions: Array<{ value: CustomizationIntent; title: string; detail: 
   { value: "maker_reference", title: "Send as maker reference", detail: "Attach the image to the brief. Do not place it on the product.", icon: FileImage },
 ];
 
-export function ProductCustomizationStudio({ product, open, onClose }: { product: Product; open: boolean; onClose: () => void }) {
+export function ProductCustomizationStudio({
+  product,
+  open,
+  onClose,
+  onContinue,
+}: {
+  product: Product;
+  open: boolean;
+  onClose: () => void;
+  onContinue: () => void;
+}) {
   const [session, setSession] = useState<CustomizationSession>(() => emptySession(product));
   const [loaded, setLoaded] = useState(false);
   const [sourceUrl, setSourceUrl] = useState("");
@@ -214,7 +224,7 @@ export function ProductCustomizationStudio({ product, open, onClose }: { product
           {selectedPreview ? <Image src={selectedPreview.url} alt="Selected product preview" width={520} height={520} unoptimized /> : null}
           <p>{selectedPreview ? <><strong>{selectedPreview.label}</strong> is now the approved visual reference for {product.makerName}.</> : session.intent === "maker_reference" ? <>{session.fileName} will be sent as a separate reference file for {product.makerName}.</> : <>Your maker notes are saved for {product.makerName}. No AI preview is required for this brief.</>} It will travel with the product reference and production instructions.</p>
           {session.notes ? <p className="custom-saved-notes">{session.notes}</p> : null}
-          <button className="gradient-stroke-button" type="button" onClick={onClose}>Continue with this brief</button>
+          <button className="gradient-stroke-button" type="button" onClick={onContinue}>Continue with this brief</button>
           <button className="ghost-button" type="button" onClick={() => persist({ ...session, mode: "choose", updatedAt: Date.now() })}>Edit brief</button>
         </section> : null}
 

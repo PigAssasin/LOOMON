@@ -20,6 +20,7 @@ type ChatMessage = {
   source?: "gemini" | "local";
 };
 type ChatThread = { id: string; title: string; createdAt: number; updatedAt: number; messages: ChatMessage[] };
+type AgentReply = Omit<ChatMessage, "id" | "role"> & { conversationId?: string };
 
 const THREADS_KEY = "loomon-agent-threads-v2";
 const ACTIVE_THREAD_KEY = "loomon-agent-active-thread-v2";
@@ -102,18 +103,19 @@ function localReplyTo(input: string, context: AgentPageContext): Omit<ChatMessag
   };
 }
 
-async function requestAgentReply(input: string, context: AgentPageContext, history: ChatMessage[]) {
+async function requestAgentReply(input: string, context: AgentPageContext, history: ChatMessage[], conversationId: string) {
   const response = await fetch("/api/agent/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       message: input,
       context,
+      conversationId,
       history: history.slice(-8).map((message) => ({ role: message.role, text: message.text })),
     }),
   });
   if (!response.ok) throw new Error("Agent chat request failed");
-  return await response.json() as Omit<ChatMessage, "id" | "role">;
+  return await response.json() as AgentReply;
 }
 
 export function AgentPanel({
@@ -163,6 +165,16 @@ export function AgentPanel({
         setActiveId(next.id);
       }
       setHydrated(true);
+      void fetch("/api/agent/conversations")
+        .then(async (response) => response.ok ? await response.json() as { conversations?: ChatThread[] } : null)
+        .then((payload) => {
+          if (!payload?.conversations?.length) return;
+          setThreads(payload.conversations);
+          setActiveId((current) => payload.conversations?.some((thread) => thread.id === current)
+            ? current
+            : payload.conversations![0].id);
+        })
+        .catch(() => undefined);
     });
     // Conversation storage is hydrated once; route context updates independently.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -209,12 +221,15 @@ export function AgentPanel({
     setTyping(true);
 
     try {
-      const reply = await requestAgentReply(clean, effectiveContext, [...historyBeforeSend, userMessage]);
-      updateThread(targetThreadId, (thread) => ({
+      const reply = await requestAgentReply(clean, effectiveContext, [...historyBeforeSend, userMessage], targetThreadId);
+      const persistedId = reply.conversationId;
+      setThreads((current) => current.map((thread) => thread.id === targetThreadId ? {
         ...thread,
+        id: persistedId ?? thread.id,
         updatedAt: Date.now(),
         messages: [...thread.messages, { id: id("assistant"), role: "assistant", ...reply, context: effectiveContext.label }],
-      }));
+      } : thread));
+      if (persistedId) setActiveId(persistedId);
     } catch {
       const reply = localReplyTo(clean, effectiveContext);
       updateThread(targetThreadId, (thread) => ({

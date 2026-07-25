@@ -1,0 +1,12 @@
+{
+  "chainId": 5042002,
+  "network": "Arc Testnet",
+  "contractName": "LoomonOrderProof",
+  "version": "1.0.0",
+  "address": "0x761202b708B2C76c300901f7ed93Ad941e9b25D6",
+  "deploymentTransactionHash": "0x99922e8341e1a3daa32b0a3874c2055cef85dd5ea30385244d49f5449564b067",
+  "deploymentBlock": 53529846,
+  "admin": "0xd59aa8db407D4219FE4b104ca4142Df14301dEc4",
+  "minter": "0xd59aa8db407D4219FE4b104ca4142Df14301dEc4",
+  "explorerUrl": "https://testnet.arcscan.app/address/0x761202b708B2C76c300901f7ed93Ad941e9b25D6"
+}

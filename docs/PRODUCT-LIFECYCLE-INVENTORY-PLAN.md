@@ -1,6 +1,6 @@
 # LOOMON Product Lifecycle, Availability and Deletion Plan
 
-Status: approved; CP1–CP2 complete, CP3 blocked on server secret/auth integration
+Status: approved; CP1–CP3.4 complete, CP3.5 planned
 Created: 2026-07-23
 Parent plans:
 
@@ -611,3 +611,354 @@ CP2 must not expose the service-role key to the browser. Seller mutations will g
 - Verified bucket privacy, limits and four Storage policies on production.
 
 CP3 requires `SUPABASE_SERVICE_ROLE_KEY` in local/Vercel server-only environment plus a real Supabase Auth seller session. Neither may be substituted with a demo identity in production.
+
+### 2026-07-23 — CP3 execution review
+
+Status: approved for step-by-step execution by the product owner.
+
+Verified starting state:
+
+- the local server-only `SUPABASE_SERVICE_ROLE_KEY` exists, is Git-ignored, and passed both Supabase REST and Auth Admin checks with HTTP 200;
+- `src/lib/supabase/database.types.ts` does not exist yet;
+- the current Supabase browser/server clients are not typed;
+- there is no authenticated seller session, middleware, maker-role authorization service, or catalog command layer;
+- the seller upload wizard still stores draft state only in React memory/object URLs;
+- discovery still reads the static `src/data/products.ts` fixture;
+- CP1 and CP2 production database/storage foundations are already deployed and remain the source of truth.
+
+CP3 is split into reviewable sub-checkpoints. Do not begin a later sub-checkpoint until the previous exit gate is recorded here.
+
+#### CP3.1 — Generated database types and typed clients
+
+Status: complete; awaiting product-owner checkpoint review.
+
+Tasks:
+
+1. Generate TypeScript types from the deployed LOOMON Supabase project.
+2. Commit the generated schema as `src/lib/supabase/database.types.ts`.
+3. Bind both browser and server Supabase clients to `Database`.
+4. Add a server-only admin client that fails closed when its secret is unavailable.
+5. Ensure no module imported by a Client Component can import the admin client.
+
+Exit gate:
+
+- generated types cover the deployed public API schema; private application
+  schemas remain intentionally unavailable to browser/Data API clients and are
+  accessed only through typed public RPC/domain boundaries;
+- typecheck, lint, unit tests and build pass;
+- the service-role key is absent from client output and Git;
+- no product mutation or UI behavior changes in this checkpoint.
+
+Rollback:
+
+- revert only the generated type/client binding files; database remains unchanged.
+
+#### CP3.2 — Authenticated seller and maker authorization
+
+Status: complete; awaiting product-owner checkpoint review.
+
+Tasks:
+
+1. Add a server helper that resolves the Supabase user from signed cookies.
+2. Resolve active maker membership from canonical membership tables.
+3. Require an explicit maker role for seller operations.
+4. Return stable `UNAUTHENTICATED`, `MEMBERSHIP_REQUIRED` and `FORBIDDEN` errors.
+5. Add unit/integration coverage for missing, inactive and cross-maker access.
+
+Exit gate:
+
+- maker identity is derived server-side and never accepted from an untrusted browser field;
+- seller A cannot obtain a command context for seller B;
+- all authorization tests and baseline checks pass.
+
+Rollback:
+
+- remove the new server authorization modules/routes; no schema rollback.
+
+#### CP3.2 verification evidence
+
+- Added migration `0014_seller_auth_context.sql` with
+  `public.get_my_seller_memberships()`.
+- The RPC derives identity exclusively from `auth.uid()` and returns only active
+  `owner`, `manager` or `catalog_editor` memberships.
+- Anonymous execute permission is revoked; authenticated execution is explicit.
+- Initial Advisor review correctly flagged the first `SECURITY DEFINER`
+  implementation.
+- Applied forward-fix `0015_harden_seller_auth_context.sql`; the function now
+  uses `SECURITY INVOKER` and remains subject to membership/maker RLS.
+- Added `src/domain/seller-access.ts` with stable
+  `UNAUTHENTICATED`, `MEMBERSHIP_REQUIRED`, `MAKER_SELECTION_REQUIRED` and
+  `FORBIDDEN` errors.
+- Added `src/server/auth/seller-context.ts`; it resolves the user through
+  `supabase.auth.getUser()` using signed request cookies, then resolves maker
+  membership with the authenticated user client. It does not use the admin
+  client and never accepts a browser-provided user ID.
+- Cross-maker requests are denied; users managing multiple makers must select
+  one explicitly instead of receiving an arbitrary default.
+- pgTAP seller-auth suite: 8/8 passed.
+- Seller-access unit tests: 5/5 passed.
+- Supabase Security Advisor: 0 findings.
+- Supabase Performance Advisor: 0 warning/error findings; fresh-project
+  unused-index notices remain informational.
+- Full app gate after implementation: typecheck, lint, unit tests and build
+  passed.
+
+Checkpoint decision:
+
+- Stop before CP3.3.
+- CP3.3 may begin only after the product owner reviews this checkpoint.
+
+#### CP3.3 — Typed product lifecycle command layer
+
+Status: complete; awaiting product-owner checkpoint review.
+
+Tasks:
+
+1. Add service-only actor-context wrappers around the existing lifecycle RPCs.
+   The wrapper receives only the actor already verified by
+   `resolveSellerContext`, sets the transaction-local JWT subject and delegates
+   to the existing authorization/idempotency implementation. Never grant these
+   wrappers to `anon` or `authenticated`.
+2. Define Zod command/result contracts and stable lifecycle error mapping.
+3. Implement server-only adapters for availability, archive, restore, draft deletion and inventory adjustment RPCs.
+4. Enforce idempotency keys and optimistic versions at the command boundary.
+5. Add reference-impact/read-model queries needed before destructive actions.
+6. Emit structured logs containing IDs/error codes only, without PII or secrets.
+
+Implementation discovery:
+
+- The lifecycle RPCs were correctly hardened to `service_role` in migration
+  `0011`, but they derive their actor from `auth.uid()`.
+- A service-role API request has no seller subject, so calling those functions
+  directly would always fail with `AUTH_REQUIRED`.
+- Opening the `SECURITY DEFINER` functions to authenticated browser users is
+  rejected because it weakens the intended server command boundary and would
+  reintroduce Security Advisor findings.
+- CP3.3 therefore requires a forward-only service wrapper migration. The
+  server passes the seller ID obtained from the signed-cookie auth context; the
+  wrapper sets it only transaction-locally, and the original functions retain
+  their maker-role, idempotency, version and reference checks.
+
+Exit gate:
+
+- every mutation requires an authorized seller context;
+- anonymous/authenticated roles cannot execute either original privileged RPCs
+  or their actor-context wrappers;
+- duplicate commands remain idempotent;
+- stale version and reference blockers return typed errors;
+- integration tests pass against the deployed schema.
+
+Rollback:
+
+- remove the command adapters; deployed RPCs remain dormant and service-role-only.
+
+#### CP3.3 verification evidence
+
+- Added migration `0016_service_product_command_wrappers.sql`.
+  Service-only wrappers set the verified actor as a transaction-local JWT
+  subject and delegate to the existing lifecycle RPCs.
+- Added migration `0017_product_reference_impact.sql`.
+  The read model reports quote, customization-project and order references,
+  hard-delete eligibility and the safe recommended action.
+- During adapter implementation, verified that a user may manage more than one
+  maker and must not be able to accidentally execute against a different
+  selected maker context.
+- Applied forward-fix `0018_bind_commands_to_maker_context.sql`.
+  Every service wrapper now requires `expected_maker_id` and verifies that the
+  product or variant belongs to that exact maker before delegating.
+- Original lifecycle RPCs and all server wrappers remain unavailable to
+  `anon` and `authenticated`; only `service_role` can execute the wrappers.
+- Added strict Zod command/result contracts and stable database-error mapping in
+  `src/domain/product-lifecycle.ts`.
+- Added the server-only command adapter
+  `src/server/catalog/product-lifecycle-commands.ts` for:
+  availability changes, archive, restore, draft deletion, inventory movement
+  and product reference impact.
+- Every command resolves the signed-cookie seller context before creating an
+  admin client; actor IDs are never accepted from command input.
+- Idempotency UUIDs and optimistic versions are required by the typed command
+  boundary where applicable.
+- Structured command logs contain only command name, maker/product/variant ID,
+  request key, outcome and stable error code. They do not contain notes, email,
+  PII, database details or secrets.
+- Service wrapper pgTAP suite: 13/13 passed, including duplicate command,
+  cross-user denial and selected-maker mismatch.
+- Product reference-impact pgTAP suite: 7/7 passed.
+- TypeScript unit tests: 5 files, 15 tests passed.
+- `npm run typecheck`: pass.
+- `npm run lint`: pass.
+- `npm run build`: pass, 68 pages generated.
+- `git diff --check`: pass.
+- Supabase Security Advisor: 0 findings.
+- Supabase Performance Advisor: 0 warning/error findings.
+- Production build scan: service-role secret not found.
+- Production migrations confirmed:
+  `service_product_command_wrappers`, `product_reference_impact`,
+  `bind_commands_to_maker_context`.
+
+Checkpoint decision:
+
+- Stop before CP3.4.
+- No browser route, Server Action or seller UI calls the privileged command
+  layer yet.
+- CP3.4 may begin only after the product owner reviews this checkpoint.
+
+#### CP3.4 — Server route/action boundary
+
+Status: complete; awaiting product-owner checkpoint review.
+
+Tasks:
+
+1. Expose one same-origin authenticated lifecycle command endpoint, one
+   inventory command endpoint and one reference-impact read endpoint. Do not
+   expose raw RPC names or actor IDs.
+2. Validate strict JSON bodies, content type, body-size limit, route product ID
+   consistency and reject unknown fields.
+3. Require same-origin mutating requests and reject cross-site requests before
+   parsing command data.
+4. Map auth/domain/database failures to stable HTTP statuses and public error
+   codes without returning database messages.
+5. Revalidate seller list, discovery and affected product paths only after a
+   confirmed mutation.
+6. Verify arbitrary actor IDs and raw service RPCs are not exposed to the browser.
+
+Exit gate:
+
+- route contract tests pass;
+- unauthorized and cross-maker calls are denied;
+- retries cannot duplicate history or inventory movement;
+- CP3 evidence is recorded before any seller UI is connected.
+
+Rollback:
+
+- remove the route/action boundary while retaining tested domain modules.
+
+#### CP3.4 verification evidence
+
+- Added strict public request contracts in
+  `src/domain/product-lifecycle-api.ts`.
+- Added same-origin lifecycle endpoint:
+  `POST /api/seller/products/[productId]/lifecycle`.
+- Added authenticated reference-impact endpoint:
+  `GET /api/seller/products/[productId]/reference-impact`.
+- Added same-origin inventory endpoint:
+  `POST /api/seller/inventory`.
+- Product ID is owned by the route path and rejected if also supplied through
+  the strict body schema.
+- Actor IDs, service RPC names and `agent_confirmed` audit sources are absent
+  from browser request contracts.
+- Agent-confirmed mutations remain reserved for a future internal Agent route
+  with explicit consent evidence.
+- Mutations require an exact same-origin `Origin`, JSON content type and a
+  maximum 16 KiB body.
+- Public error responses use stable codes/statuses and never return raw
+  database messages.
+- Successful product mutations revalidate seller, discovery and affected
+  product paths; failed mutations do not invalidate caches or claim success.
+- Added Route Handler tests for cross-site denial, unsupported content type,
+  browser actor injection and successful seller-safe command forwarding.
+- Vitest uses a test-only alias for Next's `server-only` marker; production
+  server boundaries are unchanged.
+- Route/domain test total: 7 files, 28 tests passed.
+- `npm run typecheck`: pass.
+- `npm run lint`: pass.
+- `npm run build`: pass, 69 pages generated including all three seller API
+  routes.
+- `git diff --check`: pass.
+- Public route scan found no actor parameter, service-role environment
+  reference or raw privileged RPC name.
+- Client Component privileged-import scan: 0.
+- Production build scan: service-role secret not found.
+
+Checkpoint decision:
+
+- Stop before CP3.5.
+- The route boundary is implemented but intentionally unused by the current
+  seller UI until draft/media commands and real seller authentication flows
+  are ready.
+- CP3.5 may begin only after the product owner reviews this checkpoint.
+
+#### CP3.5 — Draft creation and private-media command foundation
+
+This checkpoint is required before CP4. It was missing from the earlier
+sequence and is now explicit.
+
+Tasks:
+
+1. Add transaction-safe `create_product_draft`, `save_product_draft` and
+   `submit_product_for_review` server commands.
+2. Add optimistic draft revision/version checks and idempotency receipts.
+3. Add private staging-upload creation, validation/finalization, attachment and
+   detach commands.
+4. Prevent a seller from attaching another maker's asset or a browser-provided
+   storage path that was not issued by the server.
+5. Add draft recovery/read models required after refresh.
+6. Add pgTAP/RLS/integration tests and regenerate shared types.
+
+Exit gate:
+
+- create/save/submit/reload works without the frontend performing raw table
+  insert sequences;
+- private media ownership and reference counts are enforced;
+- retrying save/submit/finalize does not duplicate rows or attachments;
+- no UI wiring begins before this checkpoint passes.
+
+#### Buyer and seller product review before CP4
+
+Buyer improvements required:
+
+- unavailable products need a truthful direct-page state with reason and
+  expected return date instead of disappearing or producing a generic 404;
+- a paused product must never invalidate an existing order or approved brief;
+- customization projects must retain the exact product-version snapshot and
+  warn before checkout if the current listing is no longer sellable;
+- Agent recommendations, gallery, product detail and checkout must use one
+  effective-sellability rule;
+- destructive seller changes must not erase images or facts a buyer needs to
+  understand a historical order.
+
+Seller improvements required:
+
+- seller onboarding/auth and maker membership assignment are now the biggest
+  functional prerequisite; the current UI has no real signed-in seller;
+- separate language and controls for `Delete draft`, `Remove from shop`,
+  `Pause selling` and `Out of stock` must remain explicit;
+- show reference impact before archive/delete and explain what is preserved;
+- show stale-version conflicts as “This product changed elsewhere” with a
+  reload/review path, never silently overwrite;
+- users managing multiple makers need an explicit shop selector;
+- failed uploads and unfinished drafts need resumable recovery after refresh;
+- every lifecycle action needs visible history, actor, reason and timestamp;
+- role-based UI must hide or disable actions the current membership cannot
+  perform, while the server remains authoritative.
+
+Execution order after CP3:
+
+- stop for product-owner checkpoint review;
+- CP4 connects product creation, autosave and private media to the tested server boundary;
+- CP5 adds lifecycle management UI;
+- CP6 replaces static discovery/Agent availability reads;
+- contract deployment remains a separate checkpoint after database-backed order/payment preparation and does not run implicitly during CP3.
+
+#### CP3.1 verification evidence
+
+- Generated `src/lib/supabase/database.types.ts` from project
+  `tmrmvdqtkuoxforqulid` through the authenticated Supabase integration.
+- Bound `src/lib/supabase/client.ts` and `src/lib/supabase/server.ts` to the
+  generated `Database` type.
+- Added `src/lib/supabase/admin.ts` with a `server-only` boundary, disabled
+  browser-session behavior and fail-closed credential validation.
+- Confirmed the service secret works from a backend identity: Supabase REST
+  HTTP 200 and Auth Admin HTTP 200.
+- Confirmed no Client Component imports the admin module and the only source
+  reference to `SUPABASE_SERVICE_ROLE_KEY` is the server-only admin module.
+- `npm run typecheck`: pass.
+- `npm run lint`: pass.
+- `npm test`: 3 files, 4 tests passed.
+- `npm run build`: pass, 68 pages generated.
+- `git diff --check`: pass.
+
+Checkpoint decision:
+
+- Stop before CP3.2.
+- CP3.2 may begin only after the product owner reviews this checkpoint.

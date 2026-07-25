@@ -13,7 +13,9 @@ This file is the persistent operating guide for work on LOOMON. Read it before p
 ## 2. Product identity
 
 - LOOMON begins as an upload-first custom souvenir studio: a user uploads an image, the Agent turns it into previews on curated Vietnamese craft products, the user refines the result naturally, and Arc handles wallet/payment automation behind the experience.
-- The multi-seller marketplace is the long-term expansion, not the first product to build. The MVP is a single curated storefront and technology demonstration for Agent-assisted customization and Arc-native commerce.
+- The current demo permits open buyer and seller registration. One account may
+  hold both capabilities. Seller-created products still pass validation and
+  publication gates before appearing publicly.
 - The permanent brand line is `Craft lives on.` The technical descriptor is `Agent-powered commerce, settled on Arc.`
 - The primary MVP experience is `upload image -> receive product previews -> refine -> approve -> order`. The Pinterest-like gallery becomes inspiration and discovery, not the required starting point.
 - The Agent analyzes uploads, recommends compatible craft products and techniques, prepares preview revisions, collects production constraints, assists with wallet/payment, and tracks the custom order.
@@ -35,8 +37,14 @@ This file is the persistent operating guide for work on LOOMON. Read it before p
 - This is a clean project. Do not copy Float business logic, invoice factoring, lender/borrower concepts, LP logic, investor dashboards, or legacy contract architecture.
 - Reuse only verified Arc network knowledge, general wallet/payment patterns, and reusable technical setup.
 - MVP is Arc-only. Do not introduce multi-chain product behavior unless explicitly approved.
-- MVP does not include public seller onboarding, seller self-publication, social marketplace growth, reviews, bulk catalog import, or multi-maker settlement. Treat these as post-validation marketplace work.
-- The first custom contract must be scoped to a curated-store custom order on Arc Testnet. Do not implement the full multi-seller marketplace escrow before the upload-to-preview-to-order flow is validated.
+- The demo includes self-service seller/shop creation but does not include
+  unmoderated self-publication, social marketplace growth, reviews, bulk catalog
+  import, physical fulfillment, or multi-maker settlement.
+- The first contracts remain narrow Arc Testnet demonstrations. A demo order
+  mints one non-transferable Order Proof NFT only after the seller marks it
+  delivered and the buyer explicitly confirms receipt. It records that
+  confirmation but does not certify authenticity, legal title, product quality,
+  or investment value.
 
 ## 4. Data-first and agent-first rules
 
@@ -58,7 +66,8 @@ This file is the persistent operating guide for work on LOOMON. Read it before p
 
 ## 5. Seller and catalog governance
 
-These rules are retained for the later marketplace phase. During the custom-souvenir MVP, catalog and maker provenance are curated internally; there is no public seller administration surface connected to production data.
+Seller participation is open in the demo, while public catalog visibility
+remains gated by validation and moderation.
 
 - A seller acts on behalf of a maker organization. User identity and maker organization identity are separate.
 - Seller-created products begin as drafts and cannot become public until validation and publication gates pass.

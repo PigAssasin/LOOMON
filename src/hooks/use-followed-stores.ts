@@ -1,27 +1,47 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-const storageKey = "loomon-followed-stores";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createClient } from "@/src/lib/supabase/client";
 
 export function useFollowedStores() {
+  const supabase = useMemo(() => createClient(), []);
   const [followed, setFollowed] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+    const { data: authData } = await supabase.auth.getSession();
+    if (!authData.session) {
+      setFollowed([]);
+      setLoading(false);
+      return;
+    }
+    const { data } = await supabase.rpc("list_my_followed_stores");
+    setFollowed((data ?? []).map((row) => row.maker_slug));
+    setLoading(false);
+  }, [supabase]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      const stored = window.localStorage.getItem(storageKey);
-      if (stored) setFollowed(JSON.parse(stored) as string[]);
+      void refresh();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, []);
+  }, [refresh]);
 
-  function toggleFollow(slug: string) {
-    setFollowed((current) => {
-      const next = current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug];
-      window.localStorage.setItem(storageKey, JSON.stringify(next));
-      return next;
+  async function toggleFollow(slug: string) {
+    if (!supabase) return false;
+    const { data: authData } = await supabase.auth.getSession();
+    if (!authData.session) return false;
+    const { error } = await supabase.rpc("toggle_store_follow", {
+      p_maker_slug: slug,
     });
+    if (error) return false;
+    await refresh();
+    return true;
   }
 
-  return { followed, toggleFollow };
+  return { followed, loading, refresh, toggleFollow };
 }
