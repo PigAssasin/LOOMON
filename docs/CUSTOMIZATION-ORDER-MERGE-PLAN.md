@@ -1,6 +1,6 @@
 # LOOMON — Customization and Order Merge Plan
 
-Status: implemented and verified; production release pending  
+Status: implemented, verified and deployed to Production  
 Date: 2026-07-25  
 Primary rulebook: `codex.md`  
 Compared against:
@@ -84,7 +84,7 @@ Exit: successful placement is unmistakable and retry remains safe.
 
 ### M4 — Verification and release
 
-Status: verification complete; commit/deploy pending.
+Status: complete.
 
 - Add/update unit tests for schema migration and approved brief behavior.
 - Run TypeScript, ESLint, Vitest and Next production build.
@@ -105,3 +105,13 @@ Verification evidence:
   `Order not placed. Connect your wallet when you are ready.`
 - IndexedDB writes are serialized so a stale autosave cannot overwrite the
   latest brief/order fields.
+- Production deployment `dpl_uEsZ7aGKHM51RcDBi5AgeGhwW8k2` is Ready and
+  aliased to `https://loomon.vercel.app`.
+- Vercel reported no error/fatal runtime logs in the release window.
+
+Configuration follow-up:
+
+- Add a valid free `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` from Reown to remove
+  the current remote-config warning and make WalletConnect/Rainbow mobile QR
+  connectivity production-complete. Injected wallet extensions and the
+  RainbowKit chooser already render and respond.
