@@ -2,7 +2,9 @@
 
 > **Agent-Powered Custom Souvenir Commerce, Settled on Arc**
 
-LOOMON is a visual commerce app connecting global buyers with traditional Vietnamese craft workshops. Powered by a contextual AI Agent and settled on Arc Testnet, LOOMON turns a fragmented craft shopping experience into a seamless journey: from discovery and custom preview generation to escrow-backed settlement and on-chain order proof.
+🌐 **Live App:** [https://loomon.vercel.app](https://loomon.vercel.app)
+
+LOOMON is a visual commerce application connecting global buyers with traditional Vietnamese craft workshops. Powered by a contextual AI Agent and settled on Arc Testnet, LOOMON turns a fragmented craft shopping experience into a seamless journey: from discovery and custom preview generation to escrow-backed settlement and on-chain order proof.
 
 ---
 
@@ -22,14 +24,14 @@ LOOMON solves these problems by combining:
 
 * 🎨 **Visual Discovery Feed**: Explore authentic artisan products with rich filters and responsive layouts.
 * 🤖 **Personal Commerce Agent**: A unified AI assistant that understands page context, searches catalog data, and guides buyers through ordering.
-* 🖼️ **AI Customization Studio**: Upload artwork, logos, or notes to generate realistic product previews (Gemini-backed) or submit a direct brief to the maker.
+* 🖼️ **AI Customization Studio**: Upload artwork, logos, or notes to generate realistic product previews (backed by Gemini) or submit a direct brief to the maker.
 * 🔐 **Arc Testnet Escrow**: Escrow pool contracts ensure buyer funds are securely held until the order is delivered and confirmed.
 * 📜 **Order Proof NFT**: Minted directly to the buyer's wallet as portable, tamper-proof evidence of purchase and completion.
 * 📦 **Seller Management**: Dedicated dashboard for makers to accept orders, manage production milestones, and release escrow funds.
 
 ---
 
-## 🛠️ Architecture
+## 🛠️ Architecture & Tech Stack
 
 LOOMON keeps blockchain complexity hidden behind a modern Web2-like interface while utilizing Arc for transparent, programmable settlement.
 
@@ -49,7 +51,7 @@ LOOMON keeps blockchain complexity hidden behind a modern Web2-like interface wh
 ```
 
 1. **Discover**: Browse craft collections or ask the Personal Agent for recommendations.
-2. **Customize**: Choose a product, upload reference assets, and generate AI preview candidates or send a maker brief.
+2. **Customize**: Choose a product, upload reference assets, generate AI preview candidates or send a maker brief.
 3. **Pay & Escrow**: Approve order details and fund the Arc Testnet USDC escrow contract.
 4. **Fulfill & Deliver**: The maker receives structured order specs and updates production milestones.
 5. **Confirm & Prove**: Upon delivery confirmation, funds are released and an **Order Proof NFT** is minted to the buyer's wallet.
@@ -67,61 +69,9 @@ Smart contract code and Foundry tests reside in the [`contracts/`](contracts/) d
 
 ---
 
-## 💻 Implemented App Surfaces
+## 📄 Project Documentation
 
-* `/` — Animated product landing page
-* `/app` — Discovery feed, category filters, agent assistant, and wallet selector
-* `/app/products/[slug]` — Product details & custom order entry
-* `/app/seller/products/new` — Seller product upload & validation flow
-* `/app/orders` — Buyer & seller order management dashboard
-* `/app/orders/[orderId]` — Escrow-backed order detail & lifecycle actions
-* `/api/agent/chat` — Contextual AI agent server endpoint
-* `/api/checkout/confirm` — Arc escrow receipt & payment verification
-
----
-
-## 🏃 Local Setup & Verification
-
-### Prerequisites
-* Node.js 18+
-* Foundry (optional, for contract testing)
-
-### Installation
-```bash
-# Clone the repository
-git clone https://github.com/PigAssasin/LOOMON.git
-cd LOOMON
-
-# Install dependencies
-npm install
-
-# Setup environment variables
-cp .env.example .env.local
-
-# Start the development server
-npm run dev
-```
-Open [http://localhost:3000](http://localhost:3000) to view the application.
-
-### Verification & Testing
-```bash
-# Type checking & linting
-npm run typecheck
-npm run lint
-
-# Application unit tests
-npm test
-
-# Smart contract tests (Foundry)
-forge test
-```
-
----
-
-## 📄 Documentation
-
-For deeper details into technical specifications and plans:
-* [LOOMON Slide Brief](docs/LOOMON-SLIDE-BRIEF.md)
+* [LOOMON Presentation Slide Brief](docs/LOOMON-SLIDE-BRIEF.md)
 * [Master Build Plan](docs/PLAN.md)
 * [Implementation Status](docs/IMPLEMENTATION.md)
 * [Project Codex & Rules](codex.md)
