@@ -15,7 +15,9 @@ export type QuoteSubmissionResult = z.infer<typeof quoteSubmissionResultSchema>;
 export function isApprovedCustomizationBrief(
   session: CustomizationSession | undefined,
 ) {
-  return Boolean(session && session.mode === "brief" && session.submittedAt);
+  if (!session) return false;
+  if (session.intent === "text_only") return Boolean(session.notes.trim());
+  return Boolean(session.file);
 }
 
 export function sanitizeCustomizationFileName(value: string) {

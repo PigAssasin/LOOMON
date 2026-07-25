@@ -12,6 +12,8 @@ import {
   Send,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getAddress, keccak256, toBytes } from "viem";
+import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { SiteHeader } from "@/src/components/site-header";
 import {
   commerceWorkspaceSchema,
@@ -19,7 +21,14 @@ import {
   statusLabel,
   type CommerceItem,
 } from "@/src/domain/commerce-workspace";
+import {
+  escrowOrderContextSchema,
+  type EscrowAction,
+  type EscrowOrderContext,
+} from "@/src/domain/escrow-order";
 import { useLoomonSession } from "@/src/features/auth/use-loomon-session";
+import { ARC_TESTNET } from "@/src/lib/arc";
+import { loomonEscrowPoolAbi } from "@/src/lib/payments/escrow-pool";
 
 type ThreadMessage = {
   id: string;
@@ -32,7 +41,11 @@ type ThreadMessage = {
 
 export function OrderDetailExperience({ reference }: { reference: string }) {
   const session = useLoomonSession();
+  const { address } = useAccount();
+  const publicClient = usePublicClient({ chainId: ARC_TESTNET.id });
+  const { writeContractAsync } = useWriteContract();
   const [item, setItem] = useState<CommerceItem>();
+  const [escrow, setEscrow] = useState<EscrowOrderContext>();
   const [role, setRole] = useState<"buyer" | "seller">("buyer");
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [message, setMessage] = useState("");
@@ -40,6 +53,7 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [pageOpenedAt] = useState(Date.now);
 
   const load = useCallback(async () => {
     if (!session.supabase) return;
@@ -56,6 +70,17 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
     const found = buyerItem ?? sellerItem;
     setItem(found);
     setRole(buyerItem ? "buyer" : "seller");
+    if (found?.kind === "order") {
+      const { data: escrowData } = await session.supabase.rpc(
+        "get_order_escrow_context",
+        { p_order_id: found.id },
+      );
+      setEscrow(
+        escrowData ? escrowOrderContextSchema.safeParse(escrowData).data : undefined,
+      );
+    } else {
+      setEscrow(undefined);
+    }
     if (found?.threadId) {
       const { data: threadData } = await session.supabase.rpc("list_thread_messages", {
         p_thread_id: found.threadId,
@@ -106,23 +131,45 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
         return { ...step, state: terminal ? "next" : current > rank || item.status === "accepted" ? "done" : current === rank ? "current" : "next" };
       });
     }
-    const ranks = [
-      "seller_accepted",
-      "in_progress",
+    const prepaid = [
+      "escrow_funded",
+      "in_production",
       "seller_marked_delivered",
-      "buyer_confirmed_received",
-      "proof_pending",
-      "proof_minted",
-    ];
+      "release_hold",
+      "released",
+    ].includes(item.status);
+    const ranks = prepaid
+      ? [
+          "escrow_funded",
+          "in_production",
+          "seller_marked_delivered",
+          "release_hold",
+          "released",
+        ]
+      : [
+          "seller_accepted",
+          "in_progress",
+          "seller_marked_delivered",
+          "buyer_confirmed_received",
+          "proof_pending",
+          "proof_minted",
+        ];
     const current = ranks.indexOf(item.status);
-    return [
+    const timeline = prepaid ? [
+      { key: "escrow_funded", title: "Funded on Arc", detail: "Your USDC is protected in the LOOMON escrow pool." },
+      { key: "in_production", title: "In production", detail: "The seller has started the custom order." },
+      { key: "seller_marked_delivered", title: "Delivered for review", detail: "The buyer can confirm completion or report an issue." },
+      { key: "release_hold", title: "Seven-day protection", detail: "Completion is confirmed; seller funds remain locked for seven days." },
+      { key: "released", title: "Seller paid", detail: "The seller claimed the escrow after the protection period." },
+    ] : [
       { key: "seller_accepted", title: "Seller accepted", detail: "The maker accepted the customization request." },
       { key: "in_progress", title: "Preparing the order", detail: "The seller is preparing the demo order." },
       { key: "seller_marked_delivered", title: "Seller marked delivered", detail: "The buyer must confirm receipt before minting." },
       { key: "proof_minted", title: "Order proof on Arc", detail: "A non-transferable proof appears under Purchased." },
-    ].map((step) => {
+    ];
+    return timeline.map((step) => {
       const rank = ranks.indexOf(step.key);
-      return { ...step, state: current > rank || item.status === "proof_minted" ? "done" : current === rank ? "current" : "next" };
+      return { ...step, state: current > rank || ["proof_minted", "released"].includes(item.status) ? "done" : current === rank ? "current" : "next" };
     });
   }, [item]);
 
@@ -150,6 +197,109 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
     await load();
   }
 
+  async function transitionEscrow(action: EscrowAction, reason = "") {
+    if (!item || !escrow || !publicClient || !address) return;
+    setBusy(true);
+    setError("");
+    try {
+      const orderId = escrow.onchainOrderId as `0x${string}`;
+      const reasonHash = keccak256(toBytes(reason || `${action}:${item.id}`));
+      let transactionHash: `0x${string}`;
+      if (action === "start_production") {
+        transactionHash = await writeContractAsync({
+          address: getAddress(escrow.poolAddress),
+          abi: loomonEscrowPoolAbi,
+          functionName: "startProduction",
+          args: [orderId],
+          chainId: ARC_TESTNET.id,
+        });
+      } else if (action === "mark_delivered") {
+        transactionHash = await writeContractAsync({
+          address: getAddress(escrow.poolAddress),
+          abi: loomonEscrowPoolAbi,
+          functionName: "markDelivered",
+          args: [orderId, reasonHash],
+          chainId: ARC_TESTNET.id,
+        });
+      } else if (action === "confirm_completion") {
+        transactionHash = await writeContractAsync({
+          address: getAddress(escrow.poolAddress),
+          abi: loomonEscrowPoolAbi,
+          functionName: "confirmCompletion",
+          args: [orderId, reasonHash],
+          chainId: ARC_TESTNET.id,
+        });
+      } else if (action === "claim") {
+        transactionHash = await writeContractAsync({
+          address: getAddress(escrow.poolAddress),
+          abi: loomonEscrowPoolAbi,
+          functionName: "claimSellerFunds",
+          args: [orderId],
+          chainId: ARC_TESTNET.id,
+        });
+      } else if (action === "cancel") {
+        transactionHash = await writeContractAsync({
+          address: getAddress(escrow.poolAddress),
+          abi: loomonEscrowPoolAbi,
+          functionName: "cancelBeforeProduction",
+          args: [orderId, reasonHash],
+          chainId: ARC_TESTNET.id,
+        });
+      } else if (action === "refund") {
+        transactionHash = await writeContractAsync({
+          address: getAddress(escrow.poolAddress),
+          abi: loomonEscrowPoolAbi,
+          functionName: "refundBuyer",
+          args: [orderId, reasonHash],
+          chainId: ARC_TESTNET.id,
+        });
+      } else {
+        transactionHash = await writeContractAsync({
+          address: getAddress(escrow.poolAddress),
+          abi: loomonEscrowPoolAbi,
+          functionName: "raiseDispute",
+          args: [orderId, reasonHash],
+          chainId: ARC_TESTNET.id,
+        });
+      }
+
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: transactionHash,
+      });
+      if (receipt.status !== "success") throw new Error("Arc transaction reverted");
+      const response = await fetch(`/api/orders/${item.id}/escrow/confirm`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, transactionHash }),
+      });
+      if (!response.ok) {
+        const body = await response.json();
+        throw new Error(body?.error ?? "Escrow event could not be verified");
+      }
+      if (action === "confirm_completion") {
+        const proofResponse = await fetch(`/api/orders/${item.id}/proof`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ requestKey: crypto.randomUUID() }),
+        });
+        if (!proofResponse.ok) {
+          setError("Completion confirmed. The order proof will retry safely.");
+        }
+      }
+      await load();
+    } catch (cause) {
+      setError(
+        cause instanceof Error && /rejected|denied/i.test(cause.message)
+          ? "No change was made. The wallet request was closed."
+          : cause instanceof Error
+            ? cause.message
+            : "The Arc order action failed.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function sendMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!session.supabase || !item?.threadId || !message.trim()) return;
@@ -175,6 +325,13 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
     return <OrderPageShell><Link className="order-back-link" href="/app/orders"><ArrowLeft size={17} /> Back to orders</Link><div className="order-stage-empty"><span>—</span><div><h2>Order not found.</h2><p>Connect the wallet that bought or manages this order.</p></div></div></OrderPageShell>;
   }
 
+  const sellerClaimableAt = escrow?.sellerClaimableAt
+    ? new Date(escrow.sellerClaimableAt)
+    : undefined;
+  const sellerClaimIsLocked = Boolean(
+    sellerClaimableAt && sellerClaimableAt.getTime() > pageOpenedAt,
+  );
+
   return <OrderPageShell>
     <Link className="order-back-link" href="/app/orders"><ArrowLeft size={17} /> Back to orders</Link>
     <header className="real-order-header">
@@ -188,12 +345,17 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
       <section>
         <ol className="timeline">{steps.map((step) => <li className={`timeline-${step.state}`} key={step.key}><span>{step.state === "done" ? <Check size={18} /> : step.state === "current" ? <Clock3 size={18} /> : null}</span><div><strong>{step.title}</strong><p>{step.detail}</p></div></li>)}</ol>
         <div className="order-detail-actions">
-          {role === "seller" && ["seller_accepted", "in_progress"].includes(item.status) ? <button className="gradient-stroke-button" disabled={busy} type="button" onClick={() => void transition("mark_delivered")}><PackageCheck size={17} /> Mark delivered</button> : null}
-          {role === "buyer" && item.status === "seller_marked_delivered" ? <>
-            <button className="gradient-stroke-button" disabled={busy} type="button" onClick={() => void transition("confirm_received")}><Check size={17} /> Confirm received</button>
-            <button className="ghost-button" disabled={busy} type="button" onClick={() => { const reason = window.prompt("Describe the delivery issue"); if (reason) void transition("report_issue", reason); }}>Report an issue</button>
+          {escrow && role === "seller" && item.status === "escrow_funded" ? <button className="gradient-stroke-button" disabled={busy} type="button" onClick={() => void transitionEscrow("start_production")}><PackageCheck size={17} /> Start production</button> : null}
+          {escrow && role === "seller" && item.status === "in_production" ? <button className="gradient-stroke-button" disabled={busy} type="button" onClick={() => void transitionEscrow("mark_delivered", "Seller marked the demo order delivered")}><PackageCheck size={17} /> Mark delivered</button> : null}
+          {escrow && role === "buyer" && item.status === "seller_marked_delivered" ? <>
+            <button className="gradient-stroke-button" disabled={busy} type="button" onClick={() => void transitionEscrow("confirm_completion", "Buyer confirmed successful completion")}><Check size={17} /> Confirm completion</button>
+            <button className="ghost-button" disabled={busy} type="button" onClick={() => { const reason = window.prompt("Describe the issue"); if (reason) void transitionEscrow("dispute", reason); }}>Report an issue</button>
           </> : null}
-          {["seller_accepted", "in_progress"].includes(item.status) ? <button className="ghost-button" disabled={busy} type="button" onClick={() => { const reason = window.prompt("Why are you cancelling this order?"); if (reason) void transition("cancel", reason); }}>Cancel order</button> : null}
+          {escrow && role === "buyer" && item.status === "escrow_funded" ? <button className="ghost-button" disabled={busy} type="button" onClick={() => { const reason = window.prompt("Why are you cancelling before production?"); if (reason) void transitionEscrow("cancel", reason); }}>Cancel and refund</button> : null}
+          {escrow && role === "seller" && ["escrow_funded", "in_production", "seller_marked_delivered"].includes(item.status) ? <button className="ghost-button" disabled={busy} type="button" onClick={() => { const reason = window.prompt("Why are you refunding this buyer?"); if (reason) void transitionEscrow("refund", reason); }}>Refund buyer</button> : null}
+          {escrow && role === "seller" && item.status === "release_hold" ? <button className="gradient-stroke-button" disabled={busy || sellerClaimIsLocked} type="button" onClick={() => void transitionEscrow("claim")}><Check size={17} /> {sellerClaimIsLocked && sellerClaimableAt ? `Claim after ${sellerClaimableAt.toLocaleDateString()}` : "Claim USDC"}</button> : null}
+          {!escrow && role === "seller" && ["seller_accepted", "in_progress"].includes(item.status) ? <button className="gradient-stroke-button" disabled={busy} type="button" onClick={() => void transition("mark_delivered")}><PackageCheck size={17} /> Mark delivered</button> : null}
+          {!escrow && role === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" disabled={busy} type="button" onClick={() => void transition("confirm_received")}><Check size={17} /> Confirm received</button> : null}
         </div>
       </section>
 

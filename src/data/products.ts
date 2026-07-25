@@ -42,6 +42,8 @@ const catalog: Array<Omit<Seed, "imageSource" | "imagePosition">> = [
 
 export const products: Product[] = catalog.map((seed, index) => ({
   ...seed,
+  makerName: "Lò Mây",
+  accent: "green",
   id: `product-${String(index + 1).padStart(2, "0")}`,
   versionId: `product-version-${String(index + 1).padStart(2, "0")}-v1`,
   currency: "USDC",

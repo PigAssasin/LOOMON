@@ -1069,4 +1069,6 @@ Pause feature-level frontend work. Execute the gates in `docs/FRONTEND_FREEZE.md
 5. Build the backend event projection and then connect the frozen UI through typed adapters.
 Current corrective workflow plan:
 
+- `docs/ARC-PREPAID-ESCROW-ORDER-CORRECTION-PLAN.md` — direct buyer-funded Arc escrow, one-surface editable checkout, buyer-confirmed completion, seven-day seller release hold, and verified Supabase chain projection.
+
 - `docs/PRODUCT-LIFECYCLE-INVENTORY-PLAN.md` — real Supabase product creation, draft deletion, archive, pause, out-of-stock, inventory, media cleanup and seller management.

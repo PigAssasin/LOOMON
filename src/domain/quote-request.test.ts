@@ -23,10 +23,12 @@ const approvedBrief: CustomizationSession = {
 };
 
 describe("quote request domain", () => {
-  it("accepts only a submitted brief", () => {
+  it("accepts an inline text brief without a second review step", () => {
     expect(isApprovedCustomizationBrief(approvedBrief)).toBe(true);
-    expect(isApprovedCustomizationBrief({ ...approvedBrief, mode: "choose" })).toBe(false);
-    expect(isApprovedCustomizationBrief({ ...approvedBrief, submittedAt: undefined })).toBe(false);
+    expect(isApprovedCustomizationBrief({ ...approvedBrief, mode: "choose" })).toBe(true);
+    expect(
+      isApprovedCustomizationBrief({ ...approvedBrief, notes: "" }),
+    ).toBe(false);
   });
 
   it("builds an owner-scoped storage path", () => {

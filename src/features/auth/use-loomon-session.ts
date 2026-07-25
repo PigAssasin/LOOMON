@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { useAccount, useDisconnect } from "wagmi";
+import { ensureWalletSession } from "@/src/features/auth/sign-in-wallet";
 import { createClient } from "@/src/lib/supabase/client";
 
 export function useLoomonSession() {
@@ -26,16 +27,12 @@ export function useLoomonSession() {
 
     setBusy(true);
     try {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        const wallet = await connector.getProvider();
-        const { error: signInError } = await supabase.auth.signInWithWeb3({
-          chain: "ethereum",
-          statement: "Sign in to LOOMON to manage your profile and orders.",
-          wallet: wallet as never,
-        });
-        if (signInError) throw signInError;
-      }
+      await ensureWalletSession({
+        address,
+        connector,
+        statement: "Sign in to LOOMON to manage your profile and orders.",
+        supabase,
+      });
 
       const { error: walletError } = await supabase.rpc("sync_my_web3_wallet", {
         p_address: address,
@@ -72,4 +69,3 @@ export function useLoomonSession() {
     supabase,
   };
 }
-

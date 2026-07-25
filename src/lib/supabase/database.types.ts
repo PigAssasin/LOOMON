@@ -400,7 +400,46 @@ export type Database = {
           p_preview_label?: string
           p_product_slug: string
           p_quantity: number
-          p_required_by?: string
+          p_required_by: string | null
+        }
+        Returns: Json
+      }
+      prepare_prepaid_checkout: {
+        Args: {
+          p_buyer_address: string
+          p_client_request_key: string
+          p_quote_request_id: string
+        }
+        Returns: Json
+      }
+      server_confirm_prepaid_order: {
+        Args: {
+          p_block_number: number
+          p_checkout_id: string
+          p_event_payload: Json
+          p_log_index: number
+          p_transaction_hash: string
+        }
+        Returns: Json
+      }
+      server_get_prepaid_checkout: {
+        Args: { p_checkout_id: string }
+        Returns: Json
+      }
+      get_order_escrow_context: {
+        Args: {
+          p_order_id: string
+        }
+        Returns: Json
+      }
+      server_project_escrow_action: {
+        Args: {
+          p_action: string
+          p_block_number: number
+          p_event_payload: Json
+          p_log_index: number
+          p_order_id: string
+          p_transaction_hash: string
         }
         Returns: Json
       }

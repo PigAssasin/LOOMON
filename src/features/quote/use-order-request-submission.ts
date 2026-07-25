@@ -1,33 +1,54 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAccount } from "wagmi";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
+import {
+  useAccount,
+  useChainId,
+  usePublicClient,
+  useSwitchChain,
+  useWriteContract,
+} from "wagmi";
+import { erc20Abi, getAddress } from "viem";
 import type { Product } from "@/src/domain/product";
-import type { CustomizationSession } from "@/src/features/customization/customization-storage";
-import { createClient } from "@/src/lib/supabase/client";
+import {
+  prepaidCheckoutSchema,
+  prepaidOrderResultSchema,
+  type PrepaidOrderResult,
+} from "@/src/domain/prepaid-checkout";
 import {
   buildCustomizationAssetPath,
   isApprovedCustomizationBrief,
   quoteSubmissionResultSchema,
   sanitizeCustomizationFileName,
-  type QuoteSubmissionResult,
 } from "@/src/domain/quote-request";
+import type { CustomizationSession } from "@/src/features/customization/customization-storage";
+import { ensureWalletSession } from "@/src/features/auth/sign-in-wallet";
+import { ARC_TESTNET } from "@/src/lib/arc";
+import { loomonEscrowPoolAbi } from "@/src/lib/payments/escrow-pool";
+import { createClient } from "@/src/lib/supabase/client";
 
 export type OrderSubmitState =
   | "idle"
   | "connecting"
   | "signing"
   | "uploading"
-  | "submitting"
+  | "preparing"
+  | "switching_network"
+  | "approving"
+  | "funding"
+  | "verifying"
   | "success"
   | "error";
 
 const REQUEST_KEY_PREFIX = "loomon-order-request-key:";
+const PENDING_PAYMENT_PREFIX = "loomon-pending-escrow:";
 
 async function sha256(blob: Blob) {
   const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 }
 
 async function approvedAsset(session: CustomizationSession) {
@@ -53,16 +74,43 @@ async function approvedAsset(session: CustomizationSession) {
 
 function friendlyOrderError(cause: unknown) {
   const message = cause instanceof Error ? cause.message : "";
+  if (/user rejected|user denied|rejected the request/i.test(message)) {
+    return "Order not placed. Your brief is saved and no new payment was made.";
+  }
+  if (/insufficient funds|exceeds balance/i.test(message)) {
+    return "Your Arc wallet does not have enough USDC for the order and network fee.";
+  }
+  if (/seller_payment_setup_required/i.test(message)) {
+    return "This maker has not connected a payout wallet yet, so prepaid orders are temporarily unavailable.";
+  }
+  if (/product_not_available|authoritative_price_unavailable/i.test(message)) {
+    return "This product is not available at a confirmed price right now.";
+  }
   if (/web3|provider|disabled|not enabled|wallet_identity|sign|signature/i.test(message)) {
     return "We could not verify your wallet. Your order details are still saved.";
   }
   if (/network|fetch|timeout/i.test(message)) {
-    return "The connection stopped before the order was placed. Please try again.";
+    return "The connection stopped. If the Arc transaction was submitted, press Place order again to verify it.";
   }
   if (/duplicate|already exists/i.test(message)) {
-    return "This order request is already being processed. Open Orders to check it.";
+    return "This order is already being processed. Open Orders to check it.";
   }
-  return message || "The order request could not be placed. Your details are still saved.";
+  return message || "The order could not be placed. Your details are still saved.";
+}
+
+async function confirmFunding(checkoutId: string, transactionHash: string) {
+  const response = await fetch("/api/checkout/confirm", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ checkoutId, transactionHash }),
+  });
+  const body = await response.json();
+  if (!response.ok) {
+    throw new Error(
+      typeof body?.error === "string" ? body.error : "Escrow funding verification failed",
+    );
+  }
+  return prepaidOrderResultSchema.parse(body);
 }
 
 export function useOrderRequestSubmission({
@@ -73,11 +121,15 @@ export function useOrderRequestSubmission({
   session: CustomizationSession;
 }) {
   const { address, connector, isConnected } = useAccount();
+  const chainId = useChainId();
+  const publicClient = usePublicClient({ chainId: ARC_TESTNET.id });
+  const { switchChainAsync } = useSwitchChain();
+  const { writeContractAsync } = useWriteContract();
   const { connectModalOpen, openConnectModal } = useConnectModal();
   const [requestKey, setRequestKey] = useState("");
   const [submitState, setSubmitState] = useState<OrderSubmitState>("idle");
   const [error, setError] = useState("");
-  const [result, setResult] = useState<QuoteSubmissionResult>();
+  const [result, setResult] = useState<PrepaidOrderResult>();
   const [resumeAfterConnect, setResumeAfterConnect] = useState(false);
   const connectModalWasOpen = useRef(false);
 
@@ -89,7 +141,16 @@ export function useOrderRequestSubmission({
     window.queueMicrotask(() => setRequestKey(next));
   }, [product.slug]);
 
-  const isBusy = ["connecting", "signing", "uploading", "submitting"].includes(submitState);
+  const isBusy = [
+    "connecting",
+    "signing",
+    "uploading",
+    "preparing",
+    "switching_network",
+    "approving",
+    "funding",
+    "verifying",
+  ].includes(submitState);
   const canSubmit = Boolean(
     requestKey
       && isApprovedCustomizationBrief(session)
@@ -104,12 +165,12 @@ export function useOrderRequestSubmission({
   const submitAuthenticated = useCallback(async () => {
     if (!requestKey || !isApprovedCustomizationBrief(session)) {
       setSubmitState("error");
-      setError("Finish the customization brief before placing the order.");
+      setError("Complete the customization details before placing the order.");
       return;
     }
-    if (!connector || !address) {
+    if (!connector || !address || !publicClient) {
       setSubmitState("error");
-      setError("Your wallet is still connecting. Please try again.");
+      setError("Your Arc wallet is still connecting. Please try again.");
       return;
     }
 
@@ -117,22 +178,39 @@ export function useOrderRequestSubmission({
     const supabase = createClient();
     if (!supabase) {
       setSubmitState("error");
-      setError("We could not verify your wallet. Try again in a moment.");
+      setError("Checkout is not configured.");
       return;
     }
 
+    const pendingKey = `${PENDING_PAYMENT_PREFIX}${product.slug}`;
     try {
-      const { data: currentSession } = await supabase.auth.getSession();
-      if (!currentSession.session) {
-        setSubmitState("signing");
-        const wallet = await connector.getProvider();
-        const { error: authError } = await supabase.auth.signInWithWeb3({
-          chain: "ethereum",
-          statement: "Sign in to LOOMON to place this custom order request.",
-          wallet: wallet as never,
-        });
-        if (authError) throw authError;
+      const pendingRaw = window.localStorage.getItem(pendingKey);
+      if (pendingRaw) {
+        const pending = JSON.parse(pendingRaw) as {
+          checkoutId?: string;
+          transactionHash?: string;
+        };
+        if (pending.checkoutId && pending.transactionHash) {
+          setSubmitState("verifying");
+          const resumed = await confirmFunding(
+            pending.checkoutId,
+            pending.transactionHash,
+          );
+          setResult(resumed);
+          setSubmitState("success");
+          window.localStorage.removeItem(pendingKey);
+          window.localStorage.removeItem(`${REQUEST_KEY_PREFIX}${product.slug}`);
+          return;
+        }
       }
+
+      setSubmitState("signing");
+      await ensureWalletSession({
+        address,
+        connector,
+        statement: "Sign in to LOOMON to place this prepaid Arc order.",
+        supabase,
+      });
 
       const {
         data: { user },
@@ -180,27 +258,112 @@ export function useOrderRequestSubmission({
         };
       }
 
-      setSubmitState("submitting");
-      const { data, error: submitError } = await supabase.rpc("submit_customization_quote", {
-        p_product_slug: product.slug,
-        p_intent: session.intent,
-        p_notes: session.notes,
-        p_quantity: session.quantity,
-        p_required_by: session.requiredBy || undefined,
-        p_client_request_key: requestKey,
-        ...assetInput,
-      });
-      if (submitError) throw submitError;
+      setSubmitState("preparing");
+      const { data: quoteData, error: quoteError } = await supabase.rpc(
+        "submit_customization_quote",
+        {
+          p_product_slug: product.slug,
+          p_intent: session.intent,
+          p_notes: session.notes,
+          p_quantity: session.quantity,
+          p_required_by: session.requiredBy || null,
+          p_client_request_key: requestKey,
+          ...assetInput,
+        },
+      );
+      if (quoteError) throw quoteError;
+      const quote = quoteSubmissionResultSchema.parse(quoteData);
 
-      const submitted = quoteSubmissionResultSchema.parse(data);
-      setResult(submitted);
+      const { data: checkoutData, error: checkoutError } = await supabase.rpc(
+        "prepare_prepaid_checkout",
+        {
+          p_buyer_address: address,
+          p_client_request_key: requestKey,
+          p_quote_request_id: quote.quoteRequestId,
+        },
+      );
+      if (checkoutError) throw checkoutError;
+      const checkout = prepaidCheckoutSchema.parse(checkoutData);
+
+      if (chainId !== ARC_TESTNET.id) {
+        setSubmitState("switching_network");
+        await switchChainAsync({ chainId: ARC_TESTNET.id });
+      }
+
+      const buyer = getAddress(address);
+      const pool = getAddress(checkout.poolAddress);
+      const amountAtomic = BigInt(checkout.amountAtomic);
+      const allowance = await publicClient.readContract({
+        address: getAddress(ARC_TESTNET.usdcAddress),
+        abi: erc20Abi,
+        functionName: "allowance",
+        args: [buyer, pool],
+      });
+
+      if (allowance < amountAtomic) {
+        setSubmitState("approving");
+        const approvalHash = await writeContractAsync({
+          address: getAddress(ARC_TESTNET.usdcAddress),
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [pool, amountAtomic],
+          chainId: ARC_TESTNET.id,
+        });
+        const approvalReceipt = await publicClient.waitForTransactionReceipt({
+          hash: approvalHash,
+        });
+        if (approvalReceipt.status !== "success") {
+          throw new Error("USDC approval transaction reverted.");
+        }
+      }
+
+      setSubmitState("funding");
+      const transactionHash = await writeContractAsync({
+        address: pool,
+        abi: loomonEscrowPoolAbi,
+        functionName: "placeOrder",
+        args: [
+          checkout.onchainOrderId as `0x${string}`,
+          getAddress(checkout.sellerAddress),
+          amountAtomic,
+          checkout.termsHash as `0x${string}`,
+        ],
+        chainId: ARC_TESTNET.id,
+      });
+      window.localStorage.setItem(
+        pendingKey,
+        JSON.stringify({ checkoutId: checkout.checkoutId, transactionHash }),
+      );
+
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: transactionHash,
+      });
+      if (receipt.status !== "success") {
+        window.localStorage.removeItem(pendingKey);
+        throw new Error("Arc escrow transaction reverted.");
+      }
+
+      setSubmitState("verifying");
+      const confirmed = await confirmFunding(checkout.checkoutId, transactionHash);
+      setResult(confirmed);
       setSubmitState("success");
+      window.localStorage.removeItem(pendingKey);
       window.localStorage.removeItem(`${REQUEST_KEY_PREFIX}${product.slug}`);
     } catch (cause) {
       setSubmitState("error");
       setError(friendlyOrderError(cause));
     }
-  }, [address, connector, product.slug, requestKey, session]);
+  }, [
+    address,
+    chainId,
+    connector,
+    product.slug,
+    publicClient,
+    requestKey,
+    session,
+    switchChainAsync,
+    writeContractAsync,
+  ]);
 
   useEffect(() => {
     if (resumeAfterConnect && connectModalOpen) connectModalWasOpen.current = true;
@@ -230,20 +393,19 @@ export function useOrderRequestSubmission({
     setError("");
     if (!canSubmit) {
       setSubmitState("error");
-      setError("Check the quantity and finish the customization brief first.");
+      setError("Check the quantity and complete the customization details first.");
       return;
     }
     if (!isConnected) {
       if (!openConnectModal) {
         setSubmitState("error");
-        setError("The wallet chooser is unavailable. Refresh the page and try again.");
+        setError("The wallet chooser is unavailable. Refresh and try again.");
         return;
       }
       connectModalWasOpen.current = false;
       setResumeAfterConnect(true);
       setSubmitState("connecting");
       openConnectModal();
-      setSubmitState("idle");
       return;
     }
     void submitAuthenticated();

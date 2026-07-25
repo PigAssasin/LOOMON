@@ -138,14 +138,9 @@ export function ProductCustomizationStudio({
     persist({ ...session, intent, mode: "choose", status: "idle", previews: [], selectedPreview: undefined });
   }
 
-  function continueWithoutRender() {
-    if (!canContinue) return;
-    persist({ ...session, mode: "brief", status: "ready", submittedAt: Date.now(), updatedAt: Date.now() });
-  }
-
   function submitSelectedPreview() {
     if (!session.selectedPreview) return;
-    persist({ ...session, mode: "brief", submittedAt: Date.now(), updatedAt: Date.now() });
+    persist({ ...session, mode: "choose", submittedAt: Date.now(), updatedAt: Date.now() });
   }
 
   const selectedPreview = session.previews.find((preview) => preview.label === session.selectedPreview);
@@ -164,15 +159,16 @@ export function ProductCustomizationStudio({
       <div className="custom-studio-body">
         {order.result ? <section className="custom-order-success" role="status">
           <span><Check size={29} /></span>
-          <p className="bracket-label">{`{ Order request sent }`}</p>
-          <h2>The maker has your order.</h2>
-          <p>{product.makerName} will review the customization and confirm the final quote before any payment.</p>
+          <p className="bracket-label">{`{ Order funded on Arc }`}</p>
+          <h2>Your order is placed.</h2>
+          <p>Your USDC is protected in escrow while {product.makerName} completes the order. After you confirm completion, the seller waits seven days before claiming the funds.</p>
           <dl>
-            <div><dt>Reference</dt><dd>{order.result.projectReference}</dd></div>
-            <div><dt>Status</dt><dd>Waiting for seller</dd></div>
+            <div><dt>Reference</dt><dd>{order.result.orderReference}</dd></div>
+            <div><dt>Status</dt><dd>Funded in escrow</dd></div>
           </dl>
           <div className="custom-order-success-actions">
             <Link className="gradient-stroke-button" href="/app/orders">View orders</Link>
+            <a className="ghost-button" href={`https://testnet.arcscan.app/tx/${order.result.transactionHash}`} target="_blank" rel="noreferrer">View on Arcscan</a>
             <button className="ghost-button" type="button" onClick={onClose}>Close</button>
           </div>
         </section> : null}
@@ -203,13 +199,12 @@ export function ProductCustomizationStudio({
             </label>
 
             <div className="custom-action-row">
-              <button className="gradient-stroke-button" type="button" disabled={!canContinue} onClick={continueWithoutRender}>Continue</button>
               {canRender ? <button className="ghost-button" type="button" disabled={!canContinue || oneTimeRenderUsedWithoutResult} onClick={() => session.previews.length ? persist({ ...session, mode: "agent", status: "ready", updatedAt: Date.now() }) : void render(session)}>{oneTimeRenderUsedWithoutResult ? "One-time render already used" : session.renderStartedAt ? "View generated previews" : "Render 3 product previews - once"}</button> : null}
             </div>
           </div>
         </section> : null}
 
-        {!order.result && session.mode === "brief" ? <section className={`custom-brief-ready ${selectedPreview ? "custom-preview-submitted" : ""}`}>
+        {!order.result && session.mode === "choose" ? <section className={`custom-brief-ready ${selectedPreview ? "custom-preview-submitted" : ""}`}>
           <span><Check size={27} /></span>
           <p className="bracket-label">{selectedPreview ? `{ Preview and order details }` : `{ Order details }`}</p>
           <h2>Review and place your order.</h2>
@@ -248,15 +243,23 @@ export function ProductCustomizationStudio({
           </div>
 
           <div className="custom-order-estimate">
-            <span><strong>Starting estimate</strong><small>Nothing is charged now</small></span>
+            <span><strong>Estimated order total</strong><small>The confirmed USDC total appears before you sign.</small></span>
             <strong>{formatMoney(order.estimate)}</strong>
           </div>
           {order.error ? <p className="quote-submit-error" role="alert">{order.error}</p> : null}
           <button className="gradient-stroke-button full-width" type="button" disabled={!order.canSubmit} onClick={order.placeOrder}>
-            {order.isBusy ? <><LoaderCircle className="quote-spinner" size={18} /> {order.submitState === "connecting" ? "Opening wallet" : order.submitState === "signing" ? "Confirm in wallet" : order.submitState === "uploading" ? "Securing artwork" : "Placing order"}</> : <><WalletCards size={18} /> Place order</>}
+            {order.isBusy ? <><LoaderCircle className="quote-spinner" size={18} /> {
+              order.submitState === "connecting" ? "Opening wallet"
+                : order.submitState === "signing" ? "Verify wallet"
+                  : order.submitState === "uploading" ? "Securing artwork"
+                    : order.submitState === "preparing" ? "Preparing escrow"
+                      : order.submitState === "switching_network" ? "Switching to Arc"
+                        : order.submitState === "approving" ? "Allow USDC in wallet"
+                          : order.submitState === "funding" ? "Confirm order in wallet"
+                            : "Verifying Arc payment"
+            }</> : <><WalletCards size={18} /> Place order</>}
           </button>
-          <p className="quote-security-note"><ShieldCheck size={15} /> The seller reviews this request before any payment.</p>
-          <button className="ghost-button" type="button" onClick={() => persist({ ...session, mode: "choose", updatedAt: Date.now() })}>Edit brief</button>
+          <p className="quote-security-note"><ShieldCheck size={15} /> USDC goes into Arc escrow now. The seller can claim only seven days after you confirm completion.</p>
         </section> : null}
 
         {!order.result && session.mode === "agent" ? <section className="custom-render-step">
