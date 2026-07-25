@@ -517,7 +517,7 @@ Exit:
 
 ### C6 — Verification and release
 
-Status: in progress.
+Status: production deployed; two-wallet signed E2E pending.
 
 Completed evidence:
 
@@ -530,12 +530,20 @@ Completed evidence:
 - Arc Testnet proof contract is deployed and all 13 Foundry tests pass.
 - TypeScript, ESLint, 35 Vitest tests, and the Next.js production build pass.
 
-Remaining release gate:
+Production release evidence:
 
-- explicitly authorize the server-only Supabase service-role credential for
-  Vercel Production;
-- deploy the verified source;
-- execute one two-wallet production smoke order through proof minting.
+- `SUPABASE_SERVICE_ROLE_KEY` is present as a Sensitive Vercel Production
+  variable and is never committed or exposed to the browser bundle.
+- Deployment `dpl_55hcQapfB2WG1avVAovzdmV3PXz2` is Ready and aliased to
+  `https://loomon.vercel.app`.
+- Production quote, Orders, Profile and Gemini Personal Agent surfaces were
+  smoke-tested in Chrome.
+- Vercel reported no error/fatal runtime logs in the checked release window.
+
+Remaining signed E2E:
+
+- use distinct buyer and seller wallets to create, accept, deliver and confirm
+  one production order, then verify the minted token in Purchased and ArcScan.
 
 Required checks:
 

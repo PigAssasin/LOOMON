@@ -310,8 +310,8 @@ Rollback: hide the section; data and NFT remain intact.
 
 ### N5 — Arc Testnet deployment and E2E
 
-Status: contract deployed; updated Production runtime and two-wallet
-end-to-end order mint are pending.
+Status: contract and updated Production runtime deployed; two-wallet
+end-to-end order mint is pending.
 
 - Re-verify Arc network values from official docs.
 - Deploy proof contract and escrow factory.
@@ -336,9 +336,12 @@ Deployment evidence:
 - Vercel Production contains the contract address and the isolated sensitive
   minter secret; the deployer key remains local-only. The server-only Supabase
   service-role credential still requires explicit production authorization.
-- The previous production deployment is aliased to
-  `https://loomon.vercel.app`; the delivery-gated runtime has not been released
-  until all required server secrets are present.
+- Delivery-gated Production deployment `dpl_55hcQapfB2WG1avVAovzdmV3PXz2`
+  is Ready and aliased to `https://loomon.vercel.app`.
+- `SUPABASE_SERVICE_ROLE_KEY` is configured as a Sensitive Production variable;
+  the browser bundle cannot access it.
+- Production quote, Orders, Profile and Gemini Personal Agent smoke checks
+  passed; Vercel reported no error/fatal runtime logs in the release window.
 - Production smoke checks: `/`, `/app`, and `/app/profile` return `200`;
   unauthenticated `/api/purchases/proofs` returns `401`; `GET` against the
   POST-only order proof endpoint returns `405`.
