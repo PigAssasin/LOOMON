@@ -2,9 +2,9 @@
 
 **Craft lives on.**
 
-LOOMON is an agent-powered visual marketplace that brings Vietnamese craft to global buyers and settles commerce on Arc. Buyers browse a visual collection, use a commerce agent to narrow requirements and prepare a quote, then place a direct USDC deposit on Arc. Sellers publish normalized product data through a guided studio.
+LOOMON is an agent-powered visual marketplace that brings Vietnamese craft to global buyers and settles commerce on Arc. Buyers browse a visual collection, use a commerce agent to narrow requirements, customize a product, then place a prepaid order through an Arc Testnet escrow flow. Sellers manage order progress through normalized commerce data.
 
-This implementation deliberately uses **no custom smart contract**. Supabase is the commercial source of truth; Arc Testnet is the payment settlement rail.
+Supabase is the commercial source of truth; Arc Testnet provides the programmable payment and proof layer.
 
 ## Run locally
 
@@ -18,24 +18,26 @@ The catalog and commerce demo work without environment variables. Supabase persi
 
 ## Implemented surfaces
 
-- `/` — animated product landing page
-- `/app` — discovery feed, search, category filters, agent and wallet selector
-- `/app/products/[slug]` — normalized product details and quote entry point
-- `/app/seller/products/new` — six-step seller upload and validation flow
-- `/app/orders/demo-order` — agent-managed milestone and reminder timeline
-- `/api/agent/search` — bounded structured-catalog search adapter
-- `/api/payments/verify` — Arc Testnet USDC transfer receipt verifier
+- `/` - animated product landing page
+- `/app` - discovery feed, search, category filters, agent and wallet selector
+- `/app/products/[slug]` - normalized product details and custom order entry point
+- `/app/seller/products/new` - seller upload and validation flow
+- `/app/orders` - buyer/seller order management
+- `/app/orders/[orderId]` - escrow-backed order detail and lifecycle actions
+- `/api/agent/search` - bounded structured-catalog search adapter
+- `/api/checkout/confirm` - server-side Arc escrow confirmation
+- `/api/orders/[orderId]/escrow/confirm` - verified order lifecycle projection
 
 ## Architecture
 
 - Next.js App Router + React + TypeScript
 - Supabase Postgres migrations, RLS, seed data, FTS and vector-ready search documents
 - RainbowKit + Wagmi + Viem for external wallets
-- Arc Wallet represented as a separate embedded-wallet UX adapter, ready for Circle credentials
-- Direct USDC transfer verification on Arc Testnet; no escrow/custom contract
-- Vitest for normalized-data and money conversion checks
+- Gemini-backed personal agent and image-preview workflow through server-side routes
+- Arc Testnet escrow pool contract with server-side receipt/event verification
+- Vitest and Foundry coverage for normalized data, checkout, and contract behavior
 
-Read [docs/PLAN.md](docs/PLAN.md), [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), [codex.md](codex.md), and the mandatory design source in [design.md/DESIGN.md](design.md/DESIGN.md).
+Read [docs/LOOMON-SLIDE-BRIEF.md](docs/LOOMON-SLIDE-BRIEF.md), [docs/PLAN.md](docs/PLAN.md), [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), [codex.md](codex.md), and the mandatory design source in [design.md/DESIGN.md](design.md/DESIGN.md).
 
 ## Verification
 
@@ -46,4 +48,8 @@ npm test
 npm run build
 ```
 
-Visual QA captures are stored in `docs/qa/`.
+Contract tests:
+
+```bash
+forge test
+```

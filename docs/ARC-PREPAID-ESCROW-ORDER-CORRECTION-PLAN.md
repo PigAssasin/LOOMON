@@ -201,7 +201,7 @@ Exit: buyer/seller views match chain state and claim timestamp.
 - [x] Run typecheck, lint, Vitest, DB tests, Foundry and production build.
 - [x] Execute one Arc Testnet prepaid order.
 - [x] Reconcile Arcscan and Supabase payment/escrow/order/history.
-- [ ] Push, deploy Vercel and test production.
+- [x] Push, deploy Vercel and test production.
 
 Exit: production creates one funded escrow and one matching order without
 seller acceptance.
@@ -228,5 +228,9 @@ available for completion, dispute, refund and claim.
   then refunded by the Lò Mây seller transaction
   `0x943a988ded6063e3af00ff1f9925a75af9e30c36744637a759d546d3afeeb4c5`.
 - Typecheck/lint/Vitest/build: pass; 41/41 Vitest tests; 74 routes built.
-- Git commit/push:
-- Vercel deployment:
+- Git commit/push: `c0671ab`, pushed to `codex/phase-2-agent-commerce`
+  and fast-forwarded to `main`.
+- Vercel deployment: production is READY at `https://loomon.vercel.app`
+  from deployment `dpl_3MEoAJrNZCJ6imgDS1YmefCLLP27`; `/app` returned HTTP
+  200, wallet challenge returned HTTP 200, and no runtime errors were found in
+  the checked production window.
