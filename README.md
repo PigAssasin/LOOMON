@@ -2,7 +2,8 @@
 
 > **Agent-Powered Custom Souvenir Commerce, Settled on Arc**
 
-🌐 **Live App:** [https://loomon.vercel.app](https://loomon.vercel.app)
+🌐 **Landing Page:** [https://loomon.vercel.app](https://loomon.vercel.app)  
+🛍️ **Marketplace App:** [https://loomon.vercel.app/app](https://loomon.vercel.app/app)
 
 LOOMON is a visual commerce application connecting global buyers with traditional Vietnamese craft workshops. Powered by a contextual AI Agent and settled on Arc Testnet, LOOMON turns a fragmented craft shopping experience into a seamless journey: from discovery and custom preview generation to escrow-backed settlement and on-chain order proof.
 
