@@ -356,6 +356,20 @@ Remaining N5 work:
 - Seller marks it delivered and the same buyer explicitly confirms receipt.
 - Mint its proof, reconcile the event and confirm it appears in Purchased.
 
+2026-07-27 checkpoint:
+
+- Applied production migration `0037_order_proof_server_readers.sql`.
+- Added service-role-only RPCs for Purchased/proof server reads so `commerce`
+  and `wallet` schemas can remain unexposed in Supabase PostgREST.
+- Updated `order-proof-service.ts` to use those RPCs instead of direct
+  `.schema("commerce")` and `.schema("wallet")` reads.
+- Verified `service_role` can call `server_list_purchased_order_proofs`; the
+  publishable browser key receives `401`.
+- Production database currently has two orders and both are `refunded`, with no
+  seller-delivered/buyer-confirmed order eligible for proof minting yet.
+- Verification passed: `npm run typecheck`, `npm run lint`, full Vitest
+  `41/41`, `npm run build`, and Foundry `19/19`.
+
 Rollback: freeze the platform minter and point new orders to a corrected version;
 already minted proofs remain immutable.
 

@@ -1,6 +1,5 @@
 import "server-only";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   createPublicClient,
   createWalletClient,
@@ -47,45 +46,38 @@ export type PurchasedOrderProof = OrderProofRecord & {
 export class OrderProofAccessError extends Error {}
 export class OrderProofConfigurationError extends Error {}
 
-function untyped(client: ReturnType<typeof createAdminClient>) {
-  return client as unknown as SupabaseClient;
+async function callServerRpc(
+  admin: ReturnType<typeof createAdminClient>,
+  fn: string,
+  args: Record<string, unknown>,
+) {
+  const rpc = admin.rpc as unknown as (
+    rpcName: string,
+    rpcArgs: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: Error | null }>;
+  return rpc(fn, args);
 }
 
 export async function listPurchasedOrderProofs(
   ownerUserId: string,
 ): Promise<PurchasedOrderProof[]> {
   const admin = createAdminClient();
-  const { data, error } = await untyped(admin)
-    .schema("commerce")
-    .from("order_proof_nfts")
-    .select("*")
-    .eq("owner_user_id", ownerUserId)
-    .order("created_at", { ascending: false });
+  const { data, error } = await callServerRpc(
+    admin,
+    "server_list_purchased_order_proofs",
+    { target_owner_user_id: ownerUserId },
+  );
   if (error) throw error;
 
-  const proofs = (data ?? []).map(parseOrderProofRecord);
-  if (!proofs.length) return [];
-
-  const { data: orders, error: orderError } = await untyped(admin)
-    .schema("commerce")
-    .from("orders")
-    .select("id,order_number")
-    .in(
-      "id",
-      proofs.map((proof) => proof.orderId),
-    );
-  if (orderError) throw orderError;
-
-  const orderNumbers = new Map(
-    (orders ?? []).map((order) => [
-      String(order.id),
-      String(order.order_number),
-    ]),
-  );
-
-  return proofs.map((proof) => ({
-    ...proof,
-    orderNumber: orderNumbers.get(proof.orderId) ?? "LOOMON demo order",
+  return (Array.isArray(data) ? data : []).map((row) => ({
+    ...parseOrderProofRecord(row),
+    orderNumber:
+      typeof row === "object" &&
+      row !== null &&
+      "order_number" in row &&
+      typeof row.order_number === "string"
+        ? row.order_number
+        : "LOOMON demo order",
   }));
 }
 
@@ -95,37 +87,30 @@ export async function mintOrderProofForBuyer(input: {
   requestKey: string;
 }) {
   const admin = createAdminClient();
-  const db = untyped(admin);
-  const { data: orderData, error: orderError } = await db
-    .schema("commerce")
-    .from("orders")
-    .select(
-      "id,order_number,buyer_id,accepted_quote_version_id,deposit_invoice_id,status",
-    )
-    .eq("id", input.orderId)
-    .maybeSingle();
-  if (orderError) throw orderError;
-  if (!orderData || orderData.buyer_id !== input.buyerUserId) {
+  const { data: contextData, error: contextError } = await callServerRpc(
+    admin,
+    "server_get_order_proof_context",
+    {
+      target_buyer_user_id: input.buyerUserId,
+      target_order_id: input.orderId,
+    },
+  );
+  if (contextError) throw contextError;
+  if (!contextData || typeof contextData !== "object") {
     throw new OrderProofAccessError("Order not found for this buyer.");
   }
-  const order = orderData as CommerceOrder;
 
-  const { data: walletData, error: walletError } = await db
-    .schema("wallet")
-    .from("accounts")
-    .select("address")
-    .eq("user_id", input.buyerUserId)
-    .eq("chain_id", ARC_TESTNET.id)
-    .eq("is_primary", true)
-    .not("verified_at", "is", null)
-    .maybeSingle();
-  if (walletError) throw walletError;
-  if (!walletData) {
+  const context = contextData as { order?: CommerceOrder; wallet?: WalletAccount | null };
+  if (!context.order || context.order.buyer_id !== input.buyerUserId) {
+    throw new OrderProofAccessError("Order not found for this buyer.");
+  }
+  const order = context.order;
+  if (!context.wallet) {
     throw new OrderProofAccessError(
       "Connect and verify a primary Arc wallet before minting.",
     );
   }
-  const wallet = walletData as WalletAccount;
+  const wallet = context.wallet;
 
   const orderHash = keccak256(toBytes(order.id));
   const snapshotHash = keccak256(
