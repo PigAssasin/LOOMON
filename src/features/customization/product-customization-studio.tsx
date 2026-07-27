@@ -267,7 +267,7 @@ export function ProductCustomizationStudio({
                 <strong>{formatMoney(order.estimate)}</strong>
               </div>
               {order.error ? <p className="quote-submit-error" role="alert">{order.error}</p> : null}
-              <button className="gradient-stroke-button full-width" type="button" disabled={!order.canSubmit} onClick={order.placeOrder}>
+              <button className="gradient-stroke-button full-width" type="button" disabled={order.isBusy} onClick={order.placeOrder}>
                 {order.isBusy ? <><LoaderCircle className="quote-spinner" size={18} /> {
                   order.submitState === "connecting" ? "Opening wallet"
                     : order.submitState === "signing" ? "Verify wallet"

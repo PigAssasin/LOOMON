@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -38,6 +39,19 @@ type ThreadMessage = {
   structuredBody?: { event?: string; reason?: string } | null;
   createdAt: string;
 };
+type BriefAsset = {
+  id: string;
+  role?: string | null;
+  mimeType?: string | null;
+  fileName?: string | null;
+  label: string;
+  url: string | null;
+};
+type BriefAssets = {
+  briefType: string | null;
+  makerNotes: string | null;
+  assets: BriefAsset[];
+};
 
 export function OrderDetailExperience({ reference }: { reference: string }) {
   const session = useLoomonSession();
@@ -48,6 +62,7 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
   const [escrow, setEscrow] = useState<EscrowOrderContext>();
   const [role, setRole] = useState<"buyer" | "seller">("buyer");
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
+  const [briefAssets, setBriefAssets] = useState<BriefAssets>();
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -78,8 +93,11 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
       setEscrow(
         escrowData ? escrowOrderContextSchema.safeParse(escrowData).data : undefined,
       );
+      const briefResponse = await fetch(`/api/orders/${found.id}/brief-assets`);
+      setBriefAssets(briefResponse.ok ? await briefResponse.json() as BriefAssets : undefined);
     } else {
       setEscrow(undefined);
+      setBriefAssets(undefined);
     }
     if (found?.threadId) {
       const { data: threadData } = await session.supabase.rpc("list_thread_messages", {
@@ -360,6 +378,16 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
       </section>
 
       <aside className="order-chat-panel">
+        {briefAssets ? <section className="order-brief-assets">
+          <header><PackageCheck size={20} /><div><h2>Custom brief</h2><p>{briefAssets.briefType?.replaceAll("_", " ") ?? "Standard product order"}</p></div></header>
+          {briefAssets.assets.length ? <div className="order-brief-asset-grid">
+            {briefAssets.assets.map((asset) => asset.url ? <a href={asset.url} target="_blank" rel="noreferrer" key={asset.id}>
+              <Image src={asset.url} alt={asset.label} width={320} height={240} unoptimized />
+              <span>{asset.label}</span>
+            </a> : null)}
+          </div> : <p className="order-chat-empty">No uploaded artwork. Follow the seller notes below.</p>}
+          {briefAssets.makerNotes ? <p className="order-brief-notes">{briefAssets.makerNotes}</p> : null}
+        </section> : null}
         <header><MessageCircle size={20} /><div><h2>Buyer · Seller chat</h2><p>Messages stay with this order.</p></div></header>
         <div className="order-chat-messages">
           {messages.length ? messages.map((entry) => entry.kind === "text" ? <article className={`order-chat-message order-chat-message--${entry.senderType}`} key={entry.id}><span>{entry.senderType}</span><p>{entry.body}</p><time>{new Date(entry.createdAt).toLocaleString()}</time></article> : <article className="order-chat-event" key={entry.id}><p>{entry.structuredBody?.event?.replaceAll("_", " ") ?? "Order updated"}</p>{entry.structuredBody?.reason ? <small>{entry.structuredBody.reason}</small> : null}</article>) : <p className="order-chat-empty">No messages yet. Start with a production or delivery question.</p>}

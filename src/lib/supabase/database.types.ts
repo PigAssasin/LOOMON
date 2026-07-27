@@ -432,6 +432,12 @@ export type Database = {
         }
         Returns: Json
       }
+      get_order_brief_assets: {
+        Args: {
+          p_order_id: string
+        }
+        Returns: Json
+      }
       server_project_escrow_action: {
         Args: {
           p_action: string

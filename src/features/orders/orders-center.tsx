@@ -386,6 +386,8 @@ function CommerceRow({
         <button type="button" onClick={() => onRequestAction(item, "request_changes")} disabled={busy}>Request changes</button>
         <button type="button" onClick={() => onRequestAction(item, "reject")} disabled={busy}>Reject</button>
       </> : null}
+      {item.kind === "order" && mode === "seller" && item.status === "escrow_funded" ? <Link className="gradient-stroke-button" href={href}><PackageCheck size={16} /> Review escrow</Link> : null}
+      {item.kind === "order" && mode === "seller" && item.status === "in_production" ? <Link className="gradient-stroke-button" href={href}><PackageCheck size={16} /> Deliver / refund</Link> : null}
       {item.kind === "order" && mode === "seller" && ["seller_accepted", "in_progress"].includes(item.status) ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "mark_delivered")} disabled={busy}><PackageCheck size={16} /> Mark delivered</button> : null}
       {item.kind === "order" && mode === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "confirm_received")} disabled={busy}><Check size={16} /> Confirm received</button> : null}
       {item.kind === "order" && ["seller_accepted", "in_progress"].includes(item.status) ? <button type="button" onClick={() => onOrderAction(item, "cancel")} disabled={busy}>Cancel</button> : null}

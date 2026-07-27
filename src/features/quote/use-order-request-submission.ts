@@ -43,6 +43,7 @@ export type OrderSubmitState =
 
 const REQUEST_KEY_PREFIX = "loomon-order-request-key:";
 const PENDING_PAYMENT_PREFIX = "loomon-pending-escrow:";
+const SINGLE_DEMO_SELLER_ADDRESS = "0xd59aa8db407d4219fe4b104ca4142df14301dec4";
 
 async function sha256(blob: Blob) {
   const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
@@ -86,6 +87,9 @@ function submissionNotes(session: CustomizationSession) {
 
 function friendlyOrderError(cause: unknown) {
   const message = cause instanceof Error ? cause.message : "";
+  if (/buyer_seller_same|checkout_buyer_seller_different/i.test(message)) {
+    return "This wallet manages the LOOMON demo shop. Switch to a buyer wallet to place an order.";
+  }
   if (/user rejected|user denied|rejected the request/i.test(message)) {
     return "Order not placed. Your brief is saved and no new payment was made.";
   }
@@ -153,6 +157,15 @@ export function useOrderRequestSubmission({
     window.queueMicrotask(() => setRequestKey(next));
   }, [product.slug]);
 
+  const ensureRequestKey = useCallback(() => {
+    const storageKey = `${REQUEST_KEY_PREFIX}${product.slug}`;
+    const existing = window.localStorage.getItem(storageKey);
+    const next = existing || crypto.randomUUID();
+    window.localStorage.setItem(storageKey, next);
+    if (requestKey !== next) setRequestKey(next);
+    return next;
+  }, [product.slug, requestKey]);
+
   const isBusy = [
     "connecting",
     "signing",
@@ -174,8 +187,8 @@ export function useOrderRequestSubmission({
     [product.priceFrom, session.quantity],
   );
 
-  const submitAuthenticated = useCallback(async () => {
-    if (!requestKey || !isApprovedCustomizationBrief(session)) {
+  const submitAuthenticated = useCallback(async (activeRequestKey = ensureRequestKey()) => {
+    if (!activeRequestKey || !isApprovedCustomizationBrief(session)) {
       setSubmitState("error");
       setError("Complete the customization details before placing the order.");
       return;
@@ -183,6 +196,11 @@ export function useOrderRequestSubmission({
     if (!connector || !address || !publicClient) {
       setSubmitState("error");
       setError("Your Arc wallet is still connecting. Please try again.");
+      return;
+    }
+    if (getAddress(address) === getAddress(SINGLE_DEMO_SELLER_ADDRESS)) {
+      setSubmitState("error");
+      setError("This is the seller wallet for the demo shop. Switch to a buyer wallet to place an order.");
       return;
     }
 
@@ -250,7 +268,7 @@ export function useOrderRequestSubmission({
         const mimeType = asset.blob.type || "image/png";
         const uploadedPath = buildCustomizationAssetPath({
           userId: user.id,
-          requestKey,
+          requestKey: activeRequestKey,
           fileName: asset.fileName,
         });
         const { error: uploadError } = await supabase.storage
@@ -279,7 +297,7 @@ export function useOrderRequestSubmission({
           p_notes: submissionNotes(session),
           p_quantity: session.quantity,
           p_required_by: session.requiredBy || null,
-          p_client_request_key: requestKey,
+          p_client_request_key: activeRequestKey,
           ...assetInput,
         },
       );
@@ -290,7 +308,7 @@ export function useOrderRequestSubmission({
         "prepare_prepaid_checkout",
         {
           p_buyer_address: address,
-          p_client_request_key: requestKey,
+          p_client_request_key: activeRequestKey,
           p_quote_request_id: quote.quoteRequestId,
         },
       );
@@ -369,9 +387,9 @@ export function useOrderRequestSubmission({
     address,
     chainId,
     connector,
+    ensureRequestKey,
     product.slug,
     publicClient,
-    requestKey,
     session,
     switchChainAsync,
     writeContractAsync,
@@ -402,10 +420,16 @@ export function useOrderRequestSubmission({
   }, [address, connector, isConnected, resumeAfterConnect, submitAuthenticated]);
 
   const placeOrder = useCallback(() => {
+    const activeRequestKey = ensureRequestKey();
     setError("");
-    if (!canSubmit) {
+    if (session.quantity < product.minimumOrderQuantity) {
       setSubmitState("error");
-      setError("Check the quantity and complete the customization details first.");
+      setError(`Minimum order is ${product.minimumOrderQuantity} pieces.`);
+      return;
+    }
+    if (!isApprovedCustomizationBrief(session)) {
+      setSubmitState("error");
+      setError("Add your note, text, artwork, or leave the brief as a standard product order.");
       return;
     }
     if (!isConnected) {
@@ -420,8 +444,21 @@ export function useOrderRequestSubmission({
       openConnectModal();
       return;
     }
-    void submitAuthenticated();
-  }, [canSubmit, isConnected, openConnectModal, submitAuthenticated]);
+    if (address && getAddress(address) === getAddress(SINGLE_DEMO_SELLER_ADDRESS)) {
+      setSubmitState("error");
+      setError("This is the seller wallet for the demo shop. Switch to a buyer wallet to place an order.");
+      return;
+    }
+    void submitAuthenticated(activeRequestKey);
+  }, [
+    address,
+    ensureRequestKey,
+    isConnected,
+    openConnectModal,
+    product.minimumOrderQuantity,
+    session,
+    submitAuthenticated,
+  ]);
 
   return {
     canSubmit,
