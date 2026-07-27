@@ -44,6 +44,9 @@ export type OrderSubmitState =
 const REQUEST_KEY_PREFIX = "loomon-order-request-key:";
 const PENDING_PAYMENT_PREFIX = "loomon-pending-escrow:";
 const SINGLE_DEMO_SELLER_ADDRESS = "0xd59aa8db407d4219fe4b104ca4142df14301dec4";
+const RETIRED_ESCROW_POOL_ADDRESSES = new Set([
+  "0x71c23bace617d0cdfd2f4dec31d81f5eb08216c7",
+]);
 
 async function sha256(blob: Blob) {
   const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
@@ -314,6 +317,15 @@ export function useOrderRequestSubmission({
       );
       if (checkoutError) throw checkoutError;
       const checkout = prepaidCheckoutSchema.parse(checkoutData);
+      if (RETIRED_ESCROW_POOL_ADDRESSES.has(checkout.poolAddress.toLowerCase())) {
+        const freshRequestKey = crypto.randomUUID();
+        window.localStorage.setItem(`${REQUEST_KEY_PREFIX}${product.slug}`, freshRequestKey);
+        window.localStorage.removeItem(pendingKey);
+        setRequestKey(freshRequestKey);
+        setSubmitState("idle");
+        setError("Checkout was upgraded to one-step Arc payment. Press Place order once more.");
+        return;
+      }
 
       if (chainId !== ARC_TESTNET.id) {
         setSubmitState("switching_network");
