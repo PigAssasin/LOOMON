@@ -16,8 +16,7 @@ export function isApprovedCustomizationBrief(
   session: CustomizationSession | undefined,
 ) {
   if (!session) return false;
-  if (session.intent === "text_only") return Boolean(session.notes.trim());
-  return Boolean(session.file);
+  return Number.isFinite(session.quantity) && session.quantity > 0;
 }
 
 export function sanitizeCustomizationFileName(value: string) {

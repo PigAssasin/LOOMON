@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, Check, FileImage, LoaderCircle, ShieldCheck, Sparkles, Type, UploadCloud, WalletCards, WandSparkles, X } from "lucide-react";
+import { Check, ImagePlus, LoaderCircle, ShieldCheck, Sparkles, UploadCloud, WalletCards, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ProductVisual } from "@/src/components/product-visual";
 import type { Product } from "@/src/domain/product";
@@ -11,11 +11,10 @@ import {
   loadCustomization,
   normalizeCustomizationSession,
   saveCustomization,
-  type CustomizationIntent,
   type CustomizationSession,
 } from "@/src/features/customization/customization-storage";
-import { formatMoney } from "@/src/lib/money";
 import { useOrderRequestSubmission } from "@/src/features/quote/use-order-request-submission";
+import { formatMoney } from "@/src/lib/money";
 
 function tomorrow() {
   const date = new Date();
@@ -41,12 +40,6 @@ async function createProductReference(product: Product): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Product reference could not be prepared")), "image/png"));
 }
 
-const intentOptions: Array<{ value: CustomizationIntent; title: string; detail: string; icon: typeof WandSparkles }> = [
-  { value: "apply_artwork", title: "Apply my artwork", detail: "Place the uploaded design on this exact product.", icon: WandSparkles },
-  { value: "text_only", title: "Text only", detail: "Add a name, message or short line without an image.", icon: Type },
-  { value: "maker_reference", title: "Send as maker reference", detail: "Attach the image to the brief. Do not place it on the product.", icon: FileImage },
-];
-
 export function ProductCustomizationStudio({
   product,
   open,
@@ -61,7 +54,6 @@ export function ProductCustomizationStudio({
   );
   const [loaded, setLoaded] = useState(false);
   const [sourceUrl, setSourceUrl] = useState("");
-  const resumeStarted = useRef(false);
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
   const order = useOrderRequestSubmission({ product, session });
 
@@ -73,12 +65,12 @@ export function ProductCustomizationStudio({
   }, []);
 
   const render = useCallback(async (current: CustomizationSession) => {
-    if (current.intent === "apply_artwork" && !current.file) return;
-    if (current.intent === "text_only" && !current.notes.trim()) return;
-    if (current.renderStartedAt && current.status !== "rendering") return;
-    const rendering = current.status === "rendering" ? current : {
+    const textToPrint = current.printText.trim();
+    if (!current.file && !textToPrint) return;
+    const rendering = {
       ...current,
-      mode: "agent" as const,
+      mode: "choose" as const,
+      intent: current.file ? "apply_artwork" as const : "text_only" as const,
       status: "rendering" as const,
       previews: [],
       selectedPreview: undefined,
@@ -91,9 +83,10 @@ export function ProductCustomizationStudio({
       const body = new FormData();
       const productImage = await createProductReference(product);
       body.append("productImage", productImage, `${product.slug}-reference.png`);
-      if (current.intent === "apply_artwork" && current.file) body.append("artwork", current.file);
-      body.append("intent", current.intent);
+      if (current.file) body.append("artwork", current.file);
+      body.append("intent", current.file ? "apply_artwork" : "text_only");
       body.append("productName", product.title);
+      body.append("printText", textToPrint);
       body.append("notes", current.notes);
       body.append("renderId", rendering.renderId ?? "");
       const response = await fetch("/api/agent/render", { method: "POST", body });
@@ -117,12 +110,6 @@ export function ProductCustomizationStudio({
     return () => { active = false; };
   }, [product]);
 
-  useEffect(() => {
-    if (!loaded || session.status !== "rendering" || session.intent === "maker_reference" || resumeStarted.current) return;
-    resumeStarted.current = true;
-    void render(session);
-  }, [loaded, render, session]);
-
   useEffect(() => () => { if (sourceUrl) URL.revokeObjectURL(sourceUrl); }, [sourceUrl]);
 
   if (!open) return null;
@@ -131,37 +118,71 @@ export function ProductCustomizationStudio({
     if (!file || !["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) return;
     if (sourceUrl) URL.revokeObjectURL(sourceUrl);
     setSourceUrl(URL.createObjectURL(file));
-    persist({ ...session, file, fileName: file.name, previews: [], selectedPreview: undefined, renderId: undefined, renderStartedAt: undefined, submittedAt: undefined, status: "idle", updatedAt: Date.now() });
+    persist({
+      ...session,
+      file,
+      fileName: file.name,
+      intent: "apply_artwork",
+      previews: [],
+      selectedPreview: undefined,
+      renderId: undefined,
+      renderStartedAt: undefined,
+      submittedAt: undefined,
+      status: "idle",
+      updatedAt: Date.now(),
+    });
   }
 
-  function selectIntent(intent: CustomizationIntent) {
-    persist({ ...session, intent, mode: "choose", status: "idle", previews: [], selectedPreview: undefined });
+  function clearFile() {
+    if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+    setSourceUrl("");
+    const { file, fileName, ...next } = session;
+    void file;
+    void fileName;
+    persist({
+      ...next,
+      intent: next.printText.trim() ? "text_only" : "maker_reference",
+      previews: [],
+      selectedPreview: undefined,
+      renderId: undefined,
+      renderStartedAt: undefined,
+      status: "idle",
+      updatedAt: Date.now(),
+    });
   }
 
-  function submitSelectedPreview() {
-    if (!session.selectedPreview) return;
-    persist({ ...session, mode: "choose", submittedAt: Date.now(), updatedAt: Date.now() });
+  function updatePrintText(value: string) {
+    persist({
+      ...session,
+      printText: value,
+      intent: session.file ? "apply_artwork" : value.trim() ? "text_only" : "maker_reference",
+      previews: [],
+      selectedPreview: undefined,
+      renderId: undefined,
+      renderStartedAt: undefined,
+      status: "idle",
+      updatedAt: Date.now(),
+    });
   }
 
   const selectedPreview = session.previews.find((preview) => preview.label === session.selectedPreview);
-  const canContinue = session.intent === "text_only" ? Boolean(session.notes.trim()) : Boolean(session.file);
-  const canRender = session.intent !== "maker_reference";
-  const oneTimeRenderUsedWithoutResult = Boolean(session.renderStartedAt && session.previews.length === 0 && session.status !== "rendering");
+  const hasRenderInput = Boolean(session.file || session.printText.trim());
+  const renderDisabled = !hasRenderInput || order.isBusy || session.status === "rendering";
 
   return <div className="custom-studio-layer" role="dialog" aria-modal="true" aria-label={`Customize ${product.title}`}>
     <button className="custom-studio-scrim" type="button" onClick={onClose} aria-label="Close customization studio" />
     <section className="custom-studio">
       <header>
-        <div><span><Sparkles size={17} /></span><div><strong>Customize {product.title}</strong><small>Progress is saved automatically</small></div></div>
+        <div><span><Sparkles size={17} /></span><div><strong>Customize {product.title}</strong><small>{loaded ? "Progress is saved automatically" : "Loading saved draft"}</small></div></div>
         <button type="button" onClick={onClose} aria-label="Close customization studio"><X size={22} /></button>
       </header>
 
-      <div className="custom-studio-body">
+      <div className="custom-studio-body custom-studio-body--single">
         {order.result ? <section className="custom-order-success" role="status">
           <span><Check size={29} /></span>
           <p className="bracket-label">{`{ Order funded on Arc }`}</p>
           <h2>Your order is placed.</h2>
-          <p>Your USDC is protected in escrow while {product.makerName} completes the order. After you confirm completion, the seller waits seven days before claiming the funds.</p>
+          <p>Your USDC is protected in escrow while {product.makerName} completes the order. The delivery proof NFT is minted only after successful delivery is confirmed.</p>
           <dl>
             <div><dt>Reference</dt><dd>{order.result.orderReference}</dd></div>
             <div><dt>Status</dt><dd>Funded in escrow</dd></div>
@@ -171,105 +192,97 @@ export function ProductCustomizationStudio({
             <a className="ghost-button" href={`https://testnet.arcscan.app/tx/${order.result.transactionHash}`} target="_blank" rel="noreferrer">View on Arcscan</a>
             <button className="ghost-button" type="button" onClick={onClose}>Close</button>
           </div>
-        </section> : null}
+        </section> : <section className="custom-order-sheet">
+          <div className="custom-order-reference">
+            <div className="custom-product-reference"><ProductVisual product={product} /><span>Product reference - shape must stay unchanged</span></div>
+            {selectedPreview ? <div className="custom-selected-preview"><Image src={selectedPreview.url} alt="Selected AI preview" width={520} height={520} unoptimized /><span><Check size={15} /> Selected AI preview</span></div> : null}
+          </div>
 
-        {!order.result && session.mode === "choose" ? <section className="custom-setup-step">
-          <div className="custom-product-reference"><ProductVisual product={product} /><span>Product reference - shape must stay unchanged</span></div>
-          <div className="custom-setup-controls">
-            <p className="bracket-label">{`{ Custom brief }`}</p>
-            <h2>What should the maker do?</h2>
-            <div className="custom-intent-options">{intentOptions.map((option) => {
-              const Icon = option.icon;
-              return <button className={session.intent === option.value ? "active" : ""} type="button" key={option.value} onClick={() => selectIntent(option.value)}><Icon size={19} /><span><strong>{option.title}</strong><small>{option.detail}</small></span><i>{session.intent === option.value ? <Check size={15} /> : null}</i></button>;
-            })}</div>
+          <div className="custom-order-form">
+            <p className="bracket-label">{`{ Custom order }`}</p>
+            <h2>Place your order.</h2>
+            <p className="custom-order-subcopy">Only fill what you need. Image, printed text and receive date are optional.</p>
 
-            {session.intent !== "text_only" ? <div className="custom-artwork-field">
-              <span>{session.intent === "apply_artwork" ? "Artwork to place on product" : "Reference file for the maker"}</span>
-              {session.file && sourceUrl ? <div className="custom-artwork-file"><Image src={sourceUrl} alt="Uploaded artwork" width={76} height={76} unoptimized /><span><strong>{session.fileName}</strong><small>{session.intent === "maker_reference" ? "Will not be placed on the product" : "Ready to apply"}</small></span><label>Replace<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => selectFile(event.target.files?.[0])} /></label></div> : <label className="custom-artwork-upload"><UploadCloud size={22} /><span><strong>Upload an image</strong><small>PNG, JPG or WebP - maximum 5 MB</small></span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => selectFile(event.target.files?.[0])} /></label>}
-            </div> : null}
+            <div className="custom-simple-fields">
+              <div className="custom-artwork-field">
+                <span>Image to print on product <small>Optional</small></span>
+                {session.file && sourceUrl ? <div className="custom-artwork-file"><Image src={sourceUrl} alt="Uploaded artwork" width={76} height={76} unoptimized /><span><strong>{session.fileName}</strong><small>Will be sent with the order. You can render a preview before ordering.</small></span><label>Replace<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => selectFile(event.target.files?.[0])} /></label><button type="button" onClick={clearFile}>Remove</button></div> : <label className="custom-artwork-upload"><UploadCloud size={22} /><span><strong>Upload image</strong><small>PNG, JPG or WebP - maximum 5 MB</small></span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => selectFile(event.target.files?.[0])} /></label>}
+              </div>
 
-            <label className="custom-prompt-field">
-              <span>{session.intent === "text_only" ? "Text and maker notes" : "Maker notes"}</span>
-              <textarea
-                rows={4}
-                value={session.notes}
-                onChange={(event) => persist({ ...session, notes: event.target.value, updatedAt: Date.now() })}
-                placeholder={session.intent === "text_only" ? "For example: Write An & Minh 2026 in small cobalt letters near the base." : session.intent === "maker_reference" ? "Add material, size, mood, delivery or production notes for the maker." : "Add placement, size, color or production notes for the maker."}
-              />
-            </label>
+              <label className="custom-prompt-field">
+                <span>Text to print on product <small>Optional</small></span>
+                <input
+                  value={session.printText}
+                  onChange={(event) => updatePrintText(event.target.value)}
+                  placeholder="Example: An & Minh 2026"
+                />
+              </label>
 
-            <div className="custom-action-row">
-              {canRender ? <button className="ghost-button" type="button" disabled={!canContinue || oneTimeRenderUsedWithoutResult} onClick={() => session.previews.length ? persist({ ...session, mode: "agent", status: "ready", updatedAt: Date.now() }) : void render(session)}>{oneTimeRenderUsedWithoutResult ? "One-time render already used" : session.renderStartedAt ? "View generated previews" : "Render 3 product previews - once"}</button> : null}
+              <div className="custom-ai-render-card">
+                <div><ImagePlus size={19} /><span><strong>AI preview</strong><small>Optional · 3 images · about 0.03 USDC on testnet</small></span></div>
+                <button className="ghost-button" type="button" disabled={renderDisabled} onClick={() => void render(session)}>
+                  {session.status === "rendering" ? <><LoaderCircle className="quote-spinner" size={17} /> Rendering</> : session.previews.length ? "Render 3 new previews" : "Render 3 previews"}
+                </button>
+                {!hasRenderInput ? <p>Add an image or text first if you want AI previews. You can still place the order without rendering.</p> : null}
+              </div>
+
+              {session.status === "error" ? <p className="custom-render-error">AI preview could not finish. Your order details are still saved.</p> : null}
+              {session.status === "rendering" ? <div className="custom-render-loading"><i /><i /><i /></div> : null}
+              {session.previews.length ? <div className="custom-render-grid custom-render-grid--inline">{session.previews.map((preview) => <button className={session.selectedPreview === preview.label ? "active" : ""} type="button" key={preview.label} onClick={() => persist({ ...session, selectedPreview: preview.label, updatedAt: Date.now() })}><Image src={preview.url} alt={preview.label} width={440} height={440} unoptimized /><span><Check size={15} /> {session.selectedPreview === preview.label ? "Selected" : preview.label}</span></button>)}</div> : null}
+
+              <label className="custom-prompt-field">
+                <span>Note for the seller <small>Optional</small></span>
+                <textarea
+                  rows={4}
+                  value={session.notes}
+                  onChange={(event) => persist({ ...session, notes: event.target.value, updatedAt: Date.now() })}
+                  placeholder="Packaging, placement, delivery context, or anything the seller should know."
+                />
+              </label>
+
+              <div className="custom-order-fields custom-order-fields--compact">
+                <label>
+                  <span>Quantity</span>
+                  <input
+                    type="number"
+                    min={product.minimumOrderQuantity}
+                    value={session.quantity}
+                    onChange={(event) => persist({ ...session, quantity: Number(event.target.value), updatedAt: Date.now() })}
+                  />
+                  <small>Minimum {product.minimumOrderQuantity} pieces</small>
+                </label>
+                <label>
+                  <span>Wanted by <small>Optional</small></span>
+                  <input
+                    type="date"
+                    min={tomorrow()}
+                    value={session.requiredBy}
+                    onChange={(event) => persist({ ...session, requiredBy: event.target.value, updatedAt: Date.now() })}
+                  />
+                </label>
+              </div>
+
+              <div className="custom-order-estimate">
+                <span><strong>Estimated total</strong><small>USDC goes into Arc escrow when you sign.</small></span>
+                <strong>{formatMoney(order.estimate)}</strong>
+              </div>
+              {order.error ? <p className="quote-submit-error" role="alert">{order.error}</p> : null}
+              <button className="gradient-stroke-button full-width" type="button" disabled={!order.canSubmit} onClick={order.placeOrder}>
+                {order.isBusy ? <><LoaderCircle className="quote-spinner" size={18} /> {
+                  order.submitState === "connecting" ? "Opening wallet"
+                    : order.submitState === "signing" ? "Verify wallet"
+                      : order.submitState === "uploading" ? "Securing artwork"
+                        : order.submitState === "preparing" ? "Preparing escrow"
+                          : order.submitState === "switching_network" ? "Switching to Arc"
+                            : order.submitState === "approving" ? "Allow USDC"
+                              : order.submitState === "funding" ? "Confirm order"
+                                : "Verifying payment"
+                }</> : <><WalletCards size={18} /> Place order</>}
+              </button>
+              <p className="quote-security-note"><ShieldCheck size={15} /> The seller receives funds only through the escrow rules. Delivery proof NFT is minted after successful delivery confirmation.</p>
             </div>
           </div>
-        </section> : null}
-
-        {!order.result && session.mode === "choose" ? <section className={`custom-brief-ready ${selectedPreview ? "custom-preview-submitted" : ""}`}>
-          <span><Check size={27} /></span>
-          <p className="bracket-label">{selectedPreview ? `{ Preview and order details }` : `{ Order details }`}</p>
-          <h2>Review and place your order.</h2>
-          {selectedPreview ? <Image src={selectedPreview.url} alt="Selected product preview" width={520} height={520} unoptimized /> : null}
-          <p>{selectedPreview ? <><strong>{selectedPreview.label}</strong> will be sent as the approved visual reference.</> : session.intent === "maker_reference" ? <>{session.fileName} will be sent as a separate maker reference.</> : <>No AI preview is required for this order.</>}</p>
-
-          <div className="custom-order-fields">
-            <label>
-              <span>Quantity</span>
-              <input
-                type="number"
-                min={product.minimumOrderQuantity}
-                value={session.quantity}
-                onChange={(event) => persist({ ...session, quantity: Number(event.target.value), updatedAt: Date.now() })}
-              />
-              <small>Minimum {product.minimumOrderQuantity} pieces</small>
-            </label>
-            <label>
-              <span>Needed by <small>Optional</small></span>
-              <input
-                type="date"
-                min={tomorrow()}
-                value={session.requiredBy}
-                onChange={(event) => persist({ ...session, requiredBy: event.target.value, updatedAt: Date.now() })}
-              />
-            </label>
-            <label className="field-wide">
-              <span>Note for the maker</span>
-              <textarea
-                rows={4}
-                value={session.notes}
-                onChange={(event) => persist({ ...session, notes: event.target.value, updatedAt: Date.now() })}
-                placeholder="Placement, packaging, colors or anything the maker should know…"
-              />
-            </label>
-          </div>
-
-          <div className="custom-order-estimate">
-            <span><strong>Estimated order total</strong><small>The confirmed USDC total appears before you sign.</small></span>
-            <strong>{formatMoney(order.estimate)}</strong>
-          </div>
-          {order.error ? <p className="quote-submit-error" role="alert">{order.error}</p> : null}
-          <button className="gradient-stroke-button full-width" type="button" disabled={!order.canSubmit} onClick={order.placeOrder}>
-            {order.isBusy ? <><LoaderCircle className="quote-spinner" size={18} /> {
-              order.submitState === "connecting" ? "Opening wallet"
-                : order.submitState === "signing" ? "Verify wallet"
-                  : order.submitState === "uploading" ? "Securing artwork"
-                    : order.submitState === "preparing" ? "Preparing escrow"
-                      : order.submitState === "switching_network" ? "Switching to Arc"
-                        : order.submitState === "approving" ? "Allow USDC in wallet"
-                          : order.submitState === "funding" ? "Confirm order in wallet"
-                            : "Verifying Arc payment"
-            }</> : <><WalletCards size={18} /> Place order</>}
-          </button>
-          <p className="quote-security-note"><ShieldCheck size={15} /> USDC goes into Arc escrow now. The seller can claim only seven days after you confirm completion.</p>
-        </section> : null}
-
-        {!order.result && session.mode === "agent" ? <section className="custom-render-step">
-          {session.status !== "ready" ? <button className="back-link" type="button" onClick={() => persist({ ...session, mode: "choose", status: "idle", updatedAt: Date.now() })}><ArrowLeft size={16} /> Back to custom brief</button> : null}
-          <div className="custom-render-heading"><div><p className="bracket-label">{`{ Product-locked render }`}</p><h2>{session.status === "rendering" ? "Applying your design." : session.status === "ready" ? "Choose a product preview." : "Ready to try again."}</h2></div><div className="custom-render-reference"><ProductVisual product={product} /><small>Locked product</small></div></div>
-          {session.status === "rendering" ? <><div className="custom-render-loading"><i /><i /><i /></div><p className="custom-render-note">The product shape, material and color are locked. Only the requested artwork or text may change.</p></> : null}
-          {session.status === "ready" ? <><div className="custom-render-grid">{session.previews.map((preview) => <button className={session.selectedPreview === preview.label ? "active" : ""} type="button" key={preview.label} onClick={() => persist({ ...session, selectedPreview: preview.label, updatedAt: Date.now() })}><Image src={preview.url} alt={preview.label} width={440} height={440} unoptimized /><span><Check size={15} /> {session.selectedPreview === preview.label ? `${preview.label} selected` : preview.label}</span></button>)}</div><div className="custom-preview-confirm"><span>{session.selectedPreview ? `${session.selectedPreview} will be sent with the maker brief.` : "Select one preview to continue."}</span><button className="gradient-stroke-button" type="button" disabled={!session.selectedPreview} onClick={submitSelectedPreview}>Use this preview</button></div></> : null}
-          {session.status === "error" ? <p className="custom-render-error">The render stopped. The product reference and your brief are still saved.</p> : null}
-          {session.status === "error" ? <p className="custom-render-note">This one-time render could not finish. Return to the brief to keep the original artwork for the maker.</p> : null}
-        </section> : null}
+        </section>}
       </div>
     </section>
   </div>;

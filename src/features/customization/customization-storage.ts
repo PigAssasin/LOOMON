@@ -5,11 +5,12 @@ export type CustomizationStatus = "idle" | "rendering" | "ready" | "error";
 export type CustomizationPreview = { url: string; label: string; backgroundPosition?: string };
 
 export type CustomizationSession = {
-  schemaVersion: 5;
+  schemaVersion: 6;
   productSlug: string;
   mode: CustomizationMode;
   intent: CustomizationIntent;
   status: CustomizationStatus;
+  printText: string;
   notes: string;
   quantity: number;
   requiredBy: string;
@@ -30,11 +31,12 @@ export function createEmptyCustomizationSession(
   minimumOrderQuantity: number,
 ): CustomizationSession {
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     productSlug,
     mode: "choose",
     intent: "apply_artwork",
     status: "idle",
+    printText: "",
     notes: "",
     quantity: minimumOrderQuantity,
     requiredBy: "",
@@ -54,6 +56,7 @@ export function normalizeCustomizationSession(
   const legacy = stored as CustomizationSession & {
     schemaVersion?: number;
     prompt?: string;
+    printText?: string;
     quantity?: number;
     requiredBy?: string;
   };
@@ -62,11 +65,12 @@ export function normalizeCustomizationSession(
   return {
     ...empty,
     ...stored,
-    schemaVersion: 5,
+    schemaVersion: 6,
     productSlug,
-    mode: (stored.mode as string) === "manual" ? "choose" : (stored.mode ?? "choose"),
+    mode: (stored.mode as string) === "manual" || stored.mode === "brief" ? "choose" : (stored.mode ?? "choose"),
     intent: stored.intent ?? "apply_artwork",
     status: stored.status ?? "idle",
+    printText: legacy.printText ?? (stored.intent === "text_only" ? legacyPrompt : ""),
     notes: stored.notes ?? (legacyPrompt && legacyPrompt !== legacyDefault ? legacyPrompt : ""),
     quantity: Math.max(minimumOrderQuantity, legacy.quantity ?? minimumOrderQuantity),
     requiredBy: legacy.requiredBy ?? "",

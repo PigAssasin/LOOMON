@@ -8,9 +8,10 @@ import {
 describe("customization order draft", () => {
   it("starts with the product MOQ and optional date empty", () => {
     const draft = createEmptyCustomizationSession("celadon-tea-cups", 20);
-    expect(draft.schemaVersion).toBe(5);
+    expect(draft.schemaVersion).toBe(6);
     expect(draft.quantity).toBe(20);
     expect(draft.requiredBy).toBe("");
+    expect(draft.printText).toBe("");
   });
 
   it("upgrades a saved v4 brief without losing its approved preview", () => {
@@ -29,8 +30,8 @@ describe("customization order draft", () => {
     } as unknown as CustomizationSession;
 
     const upgraded = normalizeCustomizationSession("celadon-tea-cups", 20, legacy);
-    expect(upgraded.schemaVersion).toBe(5);
-    expect(upgraded.mode).toBe("brief");
+    expect(upgraded.schemaVersion).toBe(6);
+    expect(upgraded.mode).toBe("choose");
     expect(upgraded.selectedPreview).toBe("Preview 1");
     expect(upgraded.quantity).toBe(20);
     expect(upgraded.requiredBy).toBe("");

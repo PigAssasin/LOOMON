@@ -72,6 +72,18 @@ async function approvedAsset(session: CustomizationSession) {
   };
 }
 
+function submissionIntent(session: CustomizationSession) {
+  return session.file || session.selectedPreview ? "apply_artwork" : "text_only";
+}
+
+function submissionNotes(session: CustomizationSession) {
+  const parts = [
+    session.printText.trim() ? `Text to print: ${session.printText.trim()}` : "",
+    session.notes.trim() ? `Seller notes: ${session.notes.trim()}` : "",
+  ].filter(Boolean);
+  return parts.join("\n\n") || "No customization requested. Standard product order.";
+}
+
 function friendlyOrderError(cause: unknown) {
   const message = cause instanceof Error ? cause.message : "";
   if (/user rejected|user denied|rejected the request/i.test(message)) {
@@ -263,8 +275,8 @@ export function useOrderRequestSubmission({
         "submit_customization_quote",
         {
           p_product_slug: product.slug,
-          p_intent: session.intent,
-          p_notes: session.notes,
+          p_intent: submissionIntent(session),
+          p_notes: submissionNotes(session),
           p_quantity: session.quantity,
           p_required_by: session.requiredBy || null,
           p_client_request_key: requestKey,

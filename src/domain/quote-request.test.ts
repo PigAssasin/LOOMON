@@ -8,11 +8,12 @@ import {
 import type { CustomizationSession } from "@/src/features/customization/customization-storage";
 
 const approvedBrief: CustomizationSession = {
-  schemaVersion: 5,
+  schemaVersion: 6,
   productSlug: "celadon-tea-cups",
-  mode: "brief",
+  mode: "choose",
   intent: "text_only",
   status: "ready",
+  printText: "",
   notes: "Write LOOMON near the base.",
   quantity: 20,
   requiredBy: "",
@@ -23,11 +24,11 @@ const approvedBrief: CustomizationSession = {
 };
 
 describe("quote request domain", () => {
-  it("accepts an inline text brief without a second review step", () => {
+  it("accepts an order sheet even when customization is optional", () => {
     expect(isApprovedCustomizationBrief(approvedBrief)).toBe(true);
-    expect(isApprovedCustomizationBrief({ ...approvedBrief, mode: "choose" })).toBe(true);
+    expect(isApprovedCustomizationBrief({ ...approvedBrief, notes: "" })).toBe(true);
     expect(
-      isApprovedCustomizationBrief({ ...approvedBrief, notes: "" }),
+      isApprovedCustomizationBrief({ ...approvedBrief, quantity: 0 }),
     ).toBe(false);
   });
 
