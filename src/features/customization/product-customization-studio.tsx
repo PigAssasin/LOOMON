@@ -274,9 +274,8 @@ export function ProductCustomizationStudio({
                       : order.submitState === "uploading" ? "Securing artwork"
                         : order.submitState === "preparing" ? "Preparing escrow"
                           : order.submitState === "switching_network" ? "Switching to Arc"
-                            : order.submitState === "approving" ? "Allow USDC"
-                              : order.submitState === "funding" ? "Confirm order"
-                                : "Verifying payment"
+                            : order.submitState === "funding" ? "Sign order"
+                              : "Verifying payment"
                 }</> : <><WalletCards size={18} /> Place order</>}
               </button>
               <p className="quote-security-note"><ShieldCheck size={15} /> The seller receives funds only through the escrow rules. Delivery proof NFT is minted after successful delivery confirmation.</p>

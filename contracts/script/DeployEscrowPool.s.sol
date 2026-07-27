@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import { LoomonEscrowPool } from "../src/LoomonEscrowPool.sol";
+import { LoomonNativeEscrowPool } from "../src/LoomonNativeEscrowPool.sol";
 
 interface EscrowDeployVm {
     function envUint(string calldata name) external returns (uint256);
@@ -11,17 +11,15 @@ interface EscrowDeployVm {
 }
 
 contract DeployEscrowPool {
-    address private constant ARC_TESTNET_USDC = 0x3600000000000000000000000000000000000000;
-
     EscrowDeployVm private constant vm =
         EscrowDeployVm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
-    function run() external returns (LoomonEscrowPool pool) {
+    function run() external returns (LoomonNativeEscrowPool pool) {
         uint256 deployerPrivateKey = vm.envUint("ARC_DEPLOYER_PRIVATE_KEY");
         address resolver = vm.addr(deployerPrivateKey);
 
         vm.startBroadcast(deployerPrivateKey);
-        pool = new LoomonEscrowPool(ARC_TESTNET_USDC, resolver);
+        pool = new LoomonNativeEscrowPool(resolver);
         vm.stopBroadcast();
     }
 }

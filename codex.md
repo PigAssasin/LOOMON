@@ -101,6 +101,7 @@ remains gated by validation and moderation.
 - Verify payments server-side from the Arc transaction receipt and transfer data. Never trust a client-provided success flag.
 - Enforce idempotency so one transaction cannot pay multiple invoices.
 - Store application USDC amounts using the ERC-20 6-decimal model; keep raw gas/native math explicitly separated.
+- Buyer checkout uses the native Arc USDC payable escrow pool so Place order is a single wallet transaction; do not reintroduce a separate ERC-20 `approve` step for the demo checkout flow.
 - Always display balances and fees as USDC, never ETH.
 - Never expose, hardcode, log, or commit private keys, service-role keys, entity secrets, or signing credentials.
 
@@ -111,7 +112,7 @@ remains gated by validation and moderation.
 - Primary RPC: `https://rpc.testnet.arc.network`.
 - Explorer: `https://testnet.arcscan.app`.
 - USDC ERC-20 interface: `0x3600000000000000000000000000000000000000`.
-- USDC is the native gas asset. Native accounting uses 18-decimal semantics; application ERC-20 operations use 6 decimals.
+- USDC is the native gas asset. Native accounting uses 18-decimal semantics; application ERC-20/DB order amounts use 6 decimals. Native escrow value is `amount_atomic * 1e12`.
 - Treat a transaction included in an Arc block as final for normal UX; one confirmation is sufficient.
 - Re-verify network parameters and product support against official Arc documentation before deployment.
 

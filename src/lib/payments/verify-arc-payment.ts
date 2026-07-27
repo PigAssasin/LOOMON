@@ -116,30 +116,6 @@ export async function verifyArcEscrowFunding(
     };
   }
 
-  const transferLogs = parseEventLogs({
-    abi: erc20Abi,
-    eventName: "Transfer",
-    logs: receipt.logs,
-    strict: false,
-  });
-  const transfer = transferLogs.some(
-    (candidate) =>
-      getAddress(candidate.address) === getAddress(ARC_TESTNET.usdcAddress)
-      && candidate.args.from
-      && candidate.args.to
-      && candidate.args.value !== undefined
-      && getAddress(candidate.args.from) === getAddress(expected.buyer)
-      && getAddress(candidate.args.to) === getAddress(expected.poolAddress)
-      && candidate.args.value === expected.amountAtomic,
-  );
-  if (!transfer) {
-    return {
-      verified: false,
-      blockNumber: receipt.blockNumber,
-      reason: "Exact USDC escrow transfer was not found",
-    };
-  }
-
   return {
     verified: true,
     blockNumber: receipt.blockNumber,

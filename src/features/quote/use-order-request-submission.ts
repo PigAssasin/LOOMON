@@ -9,7 +9,7 @@ import {
   useSwitchChain,
   useWriteContract,
 } from "wagmi";
-import { erc20Abi, getAddress } from "viem";
+import { getAddress } from "viem";
 import type { Product } from "@/src/domain/product";
 import {
   prepaidCheckoutSchema,
@@ -320,34 +320,10 @@ export function useOrderRequestSubmission({
         await switchChainAsync({ chainId: ARC_TESTNET.id });
       }
 
-      const buyer = getAddress(address);
       const pool = getAddress(checkout.poolAddress);
       const amountAtomic = BigInt(checkout.amountAtomic);
-      const allowance = await publicClient.readContract({
-        address: getAddress(ARC_TESTNET.usdcAddress),
-        abi: erc20Abi,
-        functionName: "allowance",
-        args: [buyer, pool],
-      });
-
-      if (allowance < amountAtomic) {
-        setSubmitState("approving");
-        const approvalHash = await writeContractAsync({
-          address: getAddress(ARC_TESTNET.usdcAddress),
-          abi: erc20Abi,
-          functionName: "approve",
-          args: [pool, amountAtomic],
-          chainId: ARC_TESTNET.id,
-        });
-        const approvalReceipt = await publicClient.waitForTransactionReceipt({
-          hash: approvalHash,
-        });
-        if (approvalReceipt.status !== "success") {
-          throw new Error("USDC approval transaction reverted.");
-        }
-      }
-
       setSubmitState("funding");
+      const nativeAmount = amountAtomic * 1_000_000_000_000n;
       const transactionHash = await writeContractAsync({
         address: pool,
         abi: loomonEscrowPoolAbi,
@@ -359,6 +335,7 @@ export function useOrderRequestSubmission({
           checkout.termsHash as `0x${string}`,
         ],
         chainId: ARC_TESTNET.id,
+        value: nativeAmount,
       });
       window.localStorage.setItem(
         pendingKey,
