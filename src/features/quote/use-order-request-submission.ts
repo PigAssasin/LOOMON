@@ -179,7 +179,7 @@ export function useOrderRequestSubmission({
   const canSubmit = Boolean(
     requestKey
       && isApprovedCustomizationBrief(session)
-      && session.quantity >= product.minimumOrderQuantity
+      && session.quantity >= 1
       && !isBusy,
   );
   const estimate = useMemo(
@@ -422,9 +422,9 @@ export function useOrderRequestSubmission({
   const placeOrder = useCallback(() => {
     const activeRequestKey = ensureRequestKey();
     setError("");
-    if (session.quantity < product.minimumOrderQuantity) {
+    if (session.quantity < 1) {
       setSubmitState("error");
-      setError(`Minimum order is ${product.minimumOrderQuantity} pieces.`);
+      setError("Quantity must be at least 1 piece.");
       return;
     }
     if (!isApprovedCustomizationBrief(session)) {
@@ -455,7 +455,6 @@ export function useOrderRequestSubmission({
     ensureRequestKey,
     isConnected,
     openConnectModal,
-    product.minimumOrderQuantity,
     session,
     submitAuthenticated,
   ]);

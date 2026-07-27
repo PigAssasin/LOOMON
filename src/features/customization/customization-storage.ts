@@ -26,10 +26,7 @@ export type CustomizationSession = {
   updatedAt: number;
 };
 
-export function createEmptyCustomizationSession(
-  productSlug: string,
-  minimumOrderQuantity: number,
-): CustomizationSession {
+export function createEmptyCustomizationSession(productSlug: string): CustomizationSession {
   return {
     schemaVersion: 6,
     productSlug,
@@ -38,7 +35,7 @@ export function createEmptyCustomizationSession(
     status: "idle",
     printText: "",
     notes: "",
-    quantity: minimumOrderQuantity,
+    quantity: 1,
     requiredBy: "",
     previews: [],
     renderDemo: false,
@@ -51,7 +48,7 @@ export function normalizeCustomizationSession(
   minimumOrderQuantity: number,
   stored?: CustomizationSession,
 ): CustomizationSession {
-  const empty = createEmptyCustomizationSession(productSlug, minimumOrderQuantity);
+  const empty = createEmptyCustomizationSession(productSlug);
   if (!stored) return empty;
   const legacy = stored as CustomizationSession & {
     schemaVersion?: number;
@@ -72,7 +69,7 @@ export function normalizeCustomizationSession(
     status: stored.status ?? "idle",
     printText: legacy.printText ?? (stored.intent === "text_only" ? legacyPrompt : ""),
     notes: stored.notes ?? (legacyPrompt && legacyPrompt !== legacyDefault ? legacyPrompt : ""),
-    quantity: Math.max(minimumOrderQuantity, legacy.quantity ?? minimumOrderQuantity),
+    quantity: Math.max(1, legacy.quantity ?? Math.min(minimumOrderQuantity, 1)),
     requiredBy: legacy.requiredBy ?? "",
     previews: stored.previews ?? [],
     renderDemo: stored.renderDemo ?? false,

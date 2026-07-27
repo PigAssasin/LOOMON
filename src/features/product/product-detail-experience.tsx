@@ -41,7 +41,7 @@ export function ProductDetailExperience({ product, initialCustomizing = false }:
             <div className="product-price"><span>From</span><strong>{formatMoney(product.priceFrom)}</strong><small>per piece</small></div>
             <button className="gradient-stroke-button full-width" onClick={openCustomization} type="button"><Sparkles size={18} /> Customize with agent</button>
             <dl className="product-facts">
-              <div><dt><PackageCheck size={17} /> Minimum</dt><dd>{product.minimumOrderQuantity} pieces</dd></div>
+              <div><dt><PackageCheck size={17} /> Order size</dt><dd>From 1 piece</dd></div>
               <div><dt><Clock3 size={17} /> Lead time</dt><dd>{product.leadTimeMinDays}–{product.leadTimeMaxDays} days</dd></div>
             </dl>
           </div>

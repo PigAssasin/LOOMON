@@ -302,7 +302,7 @@ export function AgentPanel({
                     return product ? (
                       <Link href={`/app/products/${product.slug}`} onClick={onClose} key={product.slug}>
                         <span className={`result-dot accent-bg-${product.accent}`} />
-                        <span><strong>{product.title}</strong><small>{product.makerName} · MOQ {product.minimumOrderQuantity}</small></span>
+                        <span><strong>{product.title}</strong><small>{product.makerName} · from 1 piece</small></span>
                         <em>{formatMoney(product.priceFrom)}</em>
                       </Link>
                     ) : null;

@@ -342,7 +342,7 @@ export async function POST(request: Request) {
     province: product.province,
     category: product.category,
     priceFromUsdc: product.priceFrom,
-    moq: product.minimumOrderQuantity,
+    orderSize: "from 1 piece",
     leadTimeDays: `${product.leadTimeMinDays}-${product.leadTimeMaxDays}`,
     customizable: product.customizable,
     capabilities: product.customizationCapabilities,

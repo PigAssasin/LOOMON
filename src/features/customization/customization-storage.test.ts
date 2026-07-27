@@ -6,10 +6,10 @@ import {
 } from "@/src/features/customization/customization-storage";
 
 describe("customization order draft", () => {
-  it("starts with the product MOQ and optional date empty", () => {
-    const draft = createEmptyCustomizationSession("celadon-tea-cups", 20);
+  it("starts at one piece and optional date empty", () => {
+    const draft = createEmptyCustomizationSession("celadon-tea-cups");
     expect(draft.schemaVersion).toBe(6);
-    expect(draft.quantity).toBe(20);
+    expect(draft.quantity).toBe(1);
     expect(draft.requiredBy).toBe("");
     expect(draft.printText).toBe("");
   });
@@ -33,15 +33,15 @@ describe("customization order draft", () => {
     expect(upgraded.schemaVersion).toBe(6);
     expect(upgraded.mode).toBe("choose");
     expect(upgraded.selectedPreview).toBe("Preview 1");
-    expect(upgraded.quantity).toBe(20);
+    expect(upgraded.quantity).toBe(1);
     expect(upgraded.requiredBy).toBe("");
   });
 
-  it("never restores a quantity below the product MOQ", () => {
+  it("never restores a quantity below one piece", () => {
     const draft = {
-      ...createEmptyCustomizationSession("celadon-tea-cups", 20),
-      quantity: 1,
+      ...createEmptyCustomizationSession("celadon-tea-cups"),
+      quantity: 0,
     };
-    expect(normalizeCustomizationSession("celadon-tea-cups", 20, draft).quantity).toBe(20);
+    expect(normalizeCustomizationSession("celadon-tea-cups", 20, draft).quantity).toBe(1);
   });
 });

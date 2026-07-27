@@ -168,7 +168,7 @@ function ProductFocusView({ focus, onClose }: { focus: ProductFocus; onClose: ()
             <div className="product-focus-price"><small>From</small><strong>{formatMoney(product.priceFrom)}</strong><span>per piece</span></div>
           </div>
           <div className="product-focus-facts">
-            <span><Package2 size={18} /><small>Minimum order</small><strong>{product.minimumOrderQuantity} pieces</strong></span>
+            <span><Package2 size={18} /><small>Order size</small><strong>From 1 piece</strong></span>
             <span><Clock3 size={18} /><small>Lead time</small><strong>{product.leadTimeMinDays}–{product.leadTimeMaxDays} days</strong></span>
             <span><small>Material</small><strong>{product.materials.join(", ")}</strong></span>
             <span><small>Finish</small><strong>{product.finishes.join(", ")}</strong></span>

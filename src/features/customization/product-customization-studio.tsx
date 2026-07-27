@@ -50,7 +50,7 @@ export function ProductCustomizationStudio({
   onClose: () => void;
 }) {
   const [session, setSession] = useState<CustomizationSession>(
-    () => createEmptyCustomizationSession(product.slug, product.minimumOrderQuantity),
+    () => createEmptyCustomizationSession(product.slug),
   );
   const [loaded, setLoaded] = useState(false);
   const [sourceUrl, setSourceUrl] = useState("");
@@ -245,11 +245,11 @@ export function ProductCustomizationStudio({
                   <span>Quantity</span>
                   <input
                     type="number"
-                    min={product.minimumOrderQuantity}
+                    min={1}
                     value={session.quantity}
                     onChange={(event) => persist({ ...session, quantity: Number(event.target.value), updatedAt: Date.now() })}
                   />
-                  <small>Minimum {product.minimumOrderQuantity} pieces</small>
+                  <small>No minimum for the demo</small>
                 </label>
                 <label>
                   <span>Wanted by <small>Optional</small></span>
