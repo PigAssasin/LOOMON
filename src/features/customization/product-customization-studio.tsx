@@ -219,7 +219,7 @@ export function ProductCustomizationStudio({
               </label>
 
               <div className="custom-ai-render-card">
-                <div><ImagePlus size={19} /><span><strong>AI preview</strong><small>Optional · 3 images · about 0.03 USDC on testnet</small></span></div>
+                <div><ImagePlus size={19} /><span><strong>AI preview</strong><small>Optional · 3 images · testnet preview</small></span></div>
                 <button className="ghost-button" type="button" disabled={renderDisabled} onClick={() => void render(session)}>
                   {session.status === "rendering" ? <><LoaderCircle className="quote-spinner" size={17} /> Rendering</> : session.previews.length ? "Render 3 new previews" : "Render 3 previews"}
                 </button>

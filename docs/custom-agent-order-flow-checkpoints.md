@@ -39,4 +39,8 @@ Simplify the buyer flow after clicking `Custom with agent` so it feels like one 
 - [x] Keep generated preview selection working before order placement.
 - [x] Verify profile save path uses Supabase RPC/table update.
 - [x] Run typecheck, lint, tests, and build.
-- [ ] Commit, push, and deploy after checks pass.
+- [x] Commit, push, and deploy after checks pass.
+
+## Follow-up checkpoint
+
+- [ ] Add a real Arc testnet render-fee transaction before AI preview generation. The current implementation keeps AI preview optional and real, but does not yet charge the separate preview fee.
