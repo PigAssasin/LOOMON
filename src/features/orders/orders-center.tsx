@@ -36,6 +36,10 @@ type PendingAction = {
 
 const SINGLE_DEMO_SELLER_ADDRESS = "0xd59aa8db407d4219fe4b104ca4142df14301dec4";
 
+function isSingleDemoSeller(address?: string) {
+  return address?.toLowerCase() === SINGLE_DEMO_SELLER_ADDRESS;
+}
+
 const actionCopy: Record<PendingAction["action"], { title: string; placeholder: string; confirm: string }> = {
   reject: {
     title: "Reject this request?",
@@ -81,6 +85,19 @@ export function OrdersCenter() {
   const [actionBusy, setActionBusy] = useState(false);
   const [claimableMakers, setClaimableMakers] = useState<Array<{ id: number; slug: string; display_name: string }>>([]);
 
+  const loadSingleDemoSellerWorkspace = useCallback(async () => {
+    if (!address || !isSingleDemoSeller(address)) return false;
+    const response = await fetch(
+      `/api/orders/demo-seller-workspace?address=${encodeURIComponent(address)}`,
+    );
+    if (!response.ok) return false;
+    const data = await response.json();
+    setWorkspace(commerceWorkspaceSchema.parse(data));
+    setClaimableMakers([]);
+    setNeedsWalletVerification(false);
+    return true;
+  }, [address]);
+
   const loadWorkspace = useCallback(async () => {
     if (!supabase) {
       setError("LOOMON is temporarily unavailable.");
@@ -93,15 +110,19 @@ export function OrdersCenter() {
 
     const { data: authData } = await supabase.auth.getSession();
     if (!authData.session) {
-      setWorkspace(emptyCommerceWorkspace);
-      setNeedsWalletVerification(Boolean(isConnected));
+      if (!(await loadSingleDemoSellerWorkspace())) {
+        setWorkspace(emptyCommerceWorkspace);
+        setNeedsWalletVerification(Boolean(isConnected));
+      }
       setLoading(false);
       return;
     }
     if (isConnected && !sessionMatchesWallet(authData.session, address)) {
-      await supabase.auth.signOut();
-      setWorkspace(emptyCommerceWorkspace);
-      setNeedsWalletVerification(true);
+      if (!(await loadSingleDemoSellerWorkspace())) {
+        await supabase.auth.signOut();
+        setWorkspace(emptyCommerceWorkspace);
+        setNeedsWalletVerification(true);
+      }
       setLoading(false);
       return;
     }
@@ -118,7 +139,7 @@ export function OrdersCenter() {
     }
     setClaimableMakers(makers ?? []);
     setLoading(false);
-  }, [address, isConnected, supabase]);
+  }, [address, isConnected, loadSingleDemoSellerWorkspace, supabase]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -170,7 +191,7 @@ export function OrdersCenter() {
   };
 
   useEffect(() => {
-    if (address?.toLowerCase() === SINGLE_DEMO_SELLER_ADDRESS) {
+    if (isSingleDemoSeller(address)) {
       window.queueMicrotask(() => setMode("seller"));
     }
   }, [address]);
