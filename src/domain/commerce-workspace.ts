@@ -20,6 +20,8 @@ export const commerceItemSchema = z.object({
   buyerName: z.string().nullable().optional(),
   deliveredAt: z.string().nullable().optional(),
   receivedAt: z.string().nullable().optional(),
+  proofTokenId: z.union([z.string(), z.number()]).nullable().optional(),
+  proofTransactionHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/).nullable().optional(),
 });
 
 export type CommerceItem = z.infer<typeof commerceItemSchema>;

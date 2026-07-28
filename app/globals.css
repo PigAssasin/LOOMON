@@ -734,6 +734,76 @@ button { color: inherit; }
   align-self: center;
 }
 
+.orders-history-list {
+  display: grid;
+  border-top: var(--hairline);
+}
+
+.orders-history-row {
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: auto 180px minmax(220px, 1fr) minmax(150px, .52fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 0;
+  border-bottom: var(--hairline);
+}
+
+.orders-history-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-surface-25);
+}
+
+.orders-history-dot--success {
+  background: var(--color-shockingly-green);
+  box-shadow: 0 0 18px rgba(10, 228, 72, .4);
+}
+
+.orders-history-row div {
+  display: grid;
+  gap: 4px;
+}
+
+.orders-history-row strong,
+.orders-history-row p,
+.orders-history-row small,
+.orders-history-row em {
+  min-width: 0;
+  margin: 0;
+}
+
+.orders-history-row strong {
+  color: var(--color-surface-cream);
+  font-size: 15px;
+}
+
+.orders-history-row span,
+.orders-history-row small,
+.orders-history-row em {
+  color: var(--color-surface-50);
+  font-size: 13px;
+  font-style: normal;
+}
+
+.orders-history-row p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-surface-cream);
+}
+
+.orders-history-row a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  color: var(--color-light-green);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 @media (max-width: 900px) {
   .orders-heading-actions {
     width: 100%;
@@ -752,6 +822,15 @@ button { color: inherit; }
     border-left: 0;
     border-top: var(--hairline);
   }
+
+  .orders-history-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .orders-history-row p,
+  .orders-history-row small {
+    grid-column: 2 / -1;
+  }
 }
 
 @media (max-width: 620px) {
@@ -767,6 +846,17 @@ button { color: inherit; }
   .orders-real-list .order-real-row .product-visual {
     min-height: 230px;
     border-radius: 24px 24px 0 0;
+  }
+
+  .orders-history-row {
+    gap: 8px 12px;
+    padding: 13px 0;
+  }
+
+  .orders-history-row a,
+  .orders-history-row em {
+    grid-column: 2 / -1;
+    justify-content: flex-start;
   }
 
   .orders-real-list .order-feature-copy {

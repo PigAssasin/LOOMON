@@ -262,6 +262,24 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
           chainId: ARC_TESTNET.id,
         });
       } else if (action === "mark_delivered") {
+        if (item.status === "escrow_funded") {
+          const startHash = await writeContractAsync({
+            address: getAddress(escrow.poolAddress),
+            abi: loomonEscrowPoolAbi,
+            functionName: "startProduction",
+            args: [orderId],
+            chainId: ARC_TESTNET.id,
+          });
+          const startResponse = await fetch(`/api/orders/${item.id}/escrow/confirm`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action: "start_production", transactionHash: startHash }),
+          });
+          const startBody = await startResponse.json().catch(() => null);
+          if (!startResponse.ok) {
+            throw new Error(typeof startBody?.error === "string" ? startBody.error : "Production start could not be confirmed");
+          }
+        }
         transactionHash = await writeContractAsync({
           address: getAddress(escrow.poolAddress),
           abi: loomonEscrowPoolAbi,
@@ -389,14 +407,13 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
       <section>
         <ol className="timeline">{steps.map((step) => <li className={`timeline-${step.state}`} key={step.key}><span>{step.state === "done" ? <Check size={18} /> : step.state === "current" ? <Clock3 size={18} /> : null}</span><div><strong>{step.title}</strong><p>{step.detail}</p></div></li>)}</ol>
         <div className="order-detail-actions">
-          {escrow && role === "seller" && item.status === "escrow_funded" ? <button className="gradient-stroke-button" disabled={busy} type="button" onClick={() => void transitionEscrow("start_production")}><PackageCheck size={17} /> Start production</button> : null}
-          {escrow && role === "seller" && item.status === "in_production" ? <button className="gradient-stroke-button" disabled={busy} type="button" onClick={() => void transitionEscrow("mark_delivered", "Seller marked the demo order delivered")}><PackageCheck size={17} /> Mark delivered</button> : null}
+          {escrow && role === "seller" && ["escrow_funded", "in_production"].includes(item.status) ? <button className="gradient-stroke-button" disabled={busy} type="button" onClick={() => void transitionEscrow("mark_delivered", "Seller marked the demo order delivered")}><PackageCheck size={17} /> Mark delivered</button> : null}
           {escrow && role === "buyer" && item.status === "seller_marked_delivered" ? <>
             <button className="gradient-stroke-button" disabled={busy} type="button" onClick={() => void transitionEscrow("confirm_completion", "Buyer confirmed successful completion")}><Check size={17} /> Confirm completion</button>
             <button className="ghost-button" disabled={busy} type="button" onClick={() => { const reason = window.prompt("Describe the issue"); if (reason) void transitionEscrow("dispute", reason); }}>Report an issue</button>
           </> : null}
           {escrow && role === "buyer" && item.status === "escrow_funded" ? <button className="ghost-button" disabled={busy} type="button" onClick={() => void transitionEscrow("cancel", "Buyer cancelled before production")}>Cancel and refund</button> : null}
-          {escrow && role === "seller" && ["escrow_funded", "in_production", "seller_marked_delivered"].includes(item.status) ? <button className="ghost-button" disabled={busy} type="button" onClick={() => void transitionEscrow("refund", "Seller refunded the buyer")}>Refund buyer</button> : null}
+          {escrow && role === "seller" && ["escrow_funded", "in_production"].includes(item.status) ? <button className="ghost-button" disabled={busy} type="button" onClick={() => void transitionEscrow("refund", "Seller refunded the buyer")}>Refund buyer</button> : null}
           {escrow && role === "seller" && item.status === "release_hold" ? <button className="gradient-stroke-button" disabled={busy || sellerClaimIsLocked} type="button" onClick={() => void transitionEscrow("claim")}><Check size={17} /> {sellerClaimIsLocked && sellerClaimableAt ? `Claim after ${sellerClaimableAt.toLocaleDateString()}` : "Claim USDC"}</button> : null}
           {!escrow && ["seller_accepted", "in_progress"].includes(item.status) ? <p className="order-chat-empty">This is a legacy demo order without Arc escrow. Create a new paid order to use onchain delivery, refund and proof minting.</p> : null}
           {!escrow && role === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" disabled={busy} type="button" onClick={() => void transition("confirm_received")}><Check size={17} /> Confirm received</button> : null}

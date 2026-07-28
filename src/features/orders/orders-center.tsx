@@ -3,6 +3,7 @@
 import {
   Check,
   Clock3,
+  ExternalLink,
   PackageCheck,
   ShoppingBag,
   Store,
@@ -28,6 +29,8 @@ import {
   type EscrowAction,
   type EscrowOrderContext,
 } from "@/src/domain/escrow-order";
+import { buildOrderProofExplorerUrl } from "@/src/domain/order-proof";
+import type { OrderProofRecord } from "@/src/domain/order-proof";
 import { useLoomonSession } from "@/src/features/auth/use-loomon-session";
 import { sessionMatchesWallet } from "@/src/features/auth/sign-in-wallet";
 import { ARC_TESTNET } from "@/src/lib/arc";
@@ -96,6 +99,7 @@ export function OrdersCenter() {
   const [pendingAction, setPendingAction] = useState<PendingAction>();
   const [actionBusy, setActionBusy] = useState(false);
   const actionBusyRef = useRef(false);
+  const [proofsByOrderId, setProofsByOrderId] = useState<Record<string, OrderProofRecord>>({});
   const [claimableMakers, setClaimableMakers] = useState<Array<{ id: number; slug: string; display_name: string }>>([]);
   const { writeContractAsync } = useWriteContract();
 
@@ -152,6 +156,13 @@ export function OrdersCenter() {
       setError("Your orders could not be loaded. Please try again.");
     } else {
       setWorkspace(commerceWorkspaceSchema.parse(data));
+    }
+    const proofResponse = await fetch("/api/purchases/proofs");
+    if (proofResponse.ok) {
+      const proofData = await proofResponse.json() as { proofs: Array<OrderProofRecord & { orderNumber?: string }> };
+      setProofsByOrderId(Object.fromEntries(proofData.proofs.map((proof) => [proof.orderId, proof])));
+    } else {
+      setProofsByOrderId({});
     }
     setClaimableMakers(makers ?? []);
     if (!silent) setLoading(false);
@@ -366,7 +377,7 @@ export function OrdersCenter() {
 
   async function transitionEscrowOrder(
     item: CommerceItem,
-    action: Extract<EscrowAction, "start_production" | "mark_delivered" | "cancel" | "refund">,
+    action: Extract<EscrowAction, "mark_delivered" | "cancel" | "refund">,
   ) {
     if (!address) {
       setError("Connect your Arc wallet before signing this order action.");
@@ -382,15 +393,26 @@ export function OrdersCenter() {
       const reasonHash = keccak256(toBytes(`${action}:${item.id}:${item.reference}`));
       let transactionHash: `0x${string}`;
 
-      if (action === "start_production") {
-        transactionHash = await writeContractAsync({
-          address: getAddress(escrow.poolAddress),
-          abi: loomonEscrowPoolAbi,
-          functionName: "startProduction",
-          args: [orderId],
-          chainId: ARC_TESTNET.id,
-        });
-      } else if (action === "mark_delivered") {
+      if (action === "mark_delivered") {
+        if (item.status === "escrow_funded") {
+          const startHash = await writeContractAsync({
+            address: getAddress(escrow.poolAddress),
+            abi: loomonEscrowPoolAbi,
+            functionName: "startProduction",
+            args: [orderId],
+            chainId: ARC_TESTNET.id,
+          });
+          const startResponse = await fetch(`/api/orders/${item.id}/escrow/confirm`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action: "start_production", transactionHash: startHash }),
+          });
+          const startBody = await startResponse.json().catch(() => null);
+          if (!startResponse.ok) {
+            throw new Error(typeof startBody?.error === "string" ? startBody.error : "Production start could not be confirmed");
+          }
+        }
+
         transactionHash = await writeContractAsync({
           address: getAddress(escrow.poolAddress),
           abi: loomonEscrowPoolAbi,
@@ -426,7 +448,7 @@ export function OrdersCenter() {
         throw new Error(typeof body?.error === "string" ? body.error : "Escrow action could not be confirmed");
       }
 
-      if (action === "start_production" || action === "mark_delivered") setSellerTab("active");
+      if (action === "mark_delivered") setSellerTab("active");
       if (action === "cancel" || action === "refund") {
         if (mode === "buyer") setBuyerTab("history");
         else setSellerTab("history");
@@ -438,11 +460,9 @@ export function OrdersCenter() {
             ? {
                 ...order,
                 status:
-                  action === "start_production"
-                    ? "in_production"
-                    : action === "mark_delivered"
-                      ? "seller_marked_delivered"
-                      : "refunded",
+                  action === "mark_delivered"
+                    ? "seller_marked_delivered"
+                    : "refunded",
               }
             : order,
         ),
@@ -451,11 +471,9 @@ export function OrdersCenter() {
             ? {
                 ...order,
                 status:
-                  action === "start_production"
-                    ? "in_production"
-                    : action === "mark_delivered"
-                      ? "seller_marked_delivered"
-                      : "refunded",
+                  action === "mark_delivered"
+                    ? "seller_marked_delivered"
+                    : "refunded",
               }
             : order,
         ),
@@ -525,10 +543,12 @@ export function OrdersCenter() {
             <OrderTab index="02" label="Active" count={buyerCounts.active} active={buyerTab === "active"} onClick={() => setBuyerTab("active")} />
             <OrderTab index="03" label="History" count={buyerCounts.history} active={buyerTab === "history"} onClick={() => setBuyerTab("history")} />
           </nav>
-          <CommerceList
-            items={buying.filter((item) => buyingStage(item) === buyerTab)}
-            mode="buyer"
-            busy={actionBusy}
+            <CommerceList
+              items={buying.filter((item) => buyingStage(item) === buyerTab)}
+              mode="buyer"
+              compact={buyerTab === "history"}
+              proofsByOrderId={proofsByOrderId}
+              busy={actionBusy}
             onRequestAction={(item, action) => {
               if (action === "withdraw") setPendingAction({ item, action });
             }}
@@ -551,13 +571,15 @@ export function OrdersCenter() {
             <CommerceList
               items={selling.filter((item) => sellingStage(item) === sellerTab)}
               mode="seller"
+              compact={sellerTab === "history"}
+              proofsByOrderId={proofsByOrderId}
               busy={actionBusy}
               onRequestAction={(item, action) => {
                 if (action === "accept" || action === "reject") void transitionRequestOnchain(item, action);
                 else setPendingAction({ item, action });
               }}
               onOrderAction={(item, action) => {
-                if (action === "start_production" || action === "mark_delivered" || action === "refund") {
+                if (action === "mark_delivered" || action === "refund") {
                   void transitionEscrowOrder(item, action);
                 }
               }}
@@ -595,15 +617,19 @@ function OrderTab({ index, label, count, active, onClick }: { index: string; lab
 function CommerceList({
   items,
   mode,
+  compact,
+  proofsByOrderId,
   busy,
   onRequestAction,
   onOrderAction,
 }: {
   items: CommerceItem[];
   mode: OrderMode;
+  compact?: boolean;
+  proofsByOrderId: Record<string, OrderProofRecord>;
   busy: boolean;
   onRequestAction: (item: CommerceItem, action: "accept" | "reject" | "request_changes" | "withdraw") => void;
-  onOrderAction: (item: CommerceItem, action: "start_production" | "mark_delivered" | "confirm_received" | "cancel" | "refund") => void;
+  onOrderAction: (item: CommerceItem, action: "mark_delivered" | "confirm_received" | "cancel" | "refund") => void;
 }) {
   if (!items.length) {
     return <OrderStageEmpty index="—" title="Nothing here yet." detail={mode === "buyer" ? "Your next buyer action will appear here." : "New seller activity will appear here."} />;
@@ -611,7 +637,9 @@ function CommerceList({
 
   return <section className="active-orders orders-real-list">
     <div className="orders-section-title"><h2>{mode === "buyer" ? "Your purchases" : "Your shop"}</h2><span>{items.length}</span></div>
-    {items.map((item) => <CommerceRow key={`${item.kind}-${item.id}`} item={item} mode={mode} busy={busy} onRequestAction={onRequestAction} onOrderAction={onOrderAction} />)}
+    {compact
+      ? <div className="orders-history-list">{items.map((item) => <HistoryRow key={`${item.kind}-${item.id}`} item={item} mode={mode} proof={proofsByOrderId[item.id]} />)}</div>
+      : items.map((item) => <CommerceRow key={`${item.kind}-${item.id}`} item={item} mode={mode} busy={busy} onRequestAction={onRequestAction} onOrderAction={onOrderAction} />)}
   </section>;
 }
 
@@ -626,7 +654,7 @@ function CommerceRow({
   mode: OrderMode;
   busy: boolean;
   onRequestAction: (item: CommerceItem, action: "accept" | "reject" | "request_changes" | "withdraw") => void;
-  onOrderAction: (item: CommerceItem, action: "start_production" | "mark_delivered" | "confirm_received" | "cancel" | "refund") => void;
+  onOrderAction: (item: CommerceItem, action: "mark_delivered" | "confirm_received" | "cancel" | "refund") => void;
 }) {
   const product = getProductBySlug(item.productSlug) ?? products[0];
   return <article className="order-feature-row seller-request-row order-real-row">
@@ -648,13 +676,27 @@ function CommerceRow({
         <button type="button" onClick={() => onRequestAction(item, "request_changes")} disabled={busy}>Request changes</button>
         <button type="button" onClick={() => onRequestAction(item, "reject")} disabled={busy}>Reject</button>
       </> : null}
-      {item.kind === "order" && mode === "seller" && item.status === "escrow_funded" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "start_production")} disabled={busy}><PackageCheck size={16} /> Start production</button> : null}
-      {item.kind === "order" && mode === "seller" && item.status === "in_production" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "mark_delivered")} disabled={busy}><PackageCheck size={16} /> Mark delivered</button> : null}
-      {item.kind === "order" && mode === "seller" && ["escrow_funded", "in_production", "seller_marked_delivered"].includes(item.status) ? <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={busy}>Refund buyer</button> : null}
+      {item.kind === "order" && mode === "seller" && ["escrow_funded", "in_production"].includes(item.status) ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "mark_delivered")} disabled={busy}><PackageCheck size={16} /> Mark delivered</button> : null}
+      {item.kind === "order" && mode === "seller" && ["escrow_funded", "in_production"].includes(item.status) ? <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={busy}>Refund buyer</button> : null}
       {item.kind === "order" && mode === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "confirm_received")} disabled={busy}><Check size={16} /> Confirm received</button> : null}
       {item.kind === "order" && mode === "buyer" && item.status === "escrow_funded" ? <button type="button" onClick={() => onOrderAction(item, "cancel")} disabled={busy}>Cancel + refund</button> : null}
       {item.kind === "order" && ["seller_accepted", "in_progress"].includes(item.status) ? <span className="orders-wallet-pill">Legacy · no escrow</span> : null}
     </div>
+  </article>;
+}
+
+function HistoryRow({ item, mode, proof }: { item: CommerceItem; mode: OrderMode; proof?: OrderProofRecord }) {
+  const explorerUrl = buildOrderProofExplorerUrl(proof?.mintTransactionHash ?? item.proofTransactionHash ?? null);
+  const success = ["proof_minted", "released", "seller_marked_delivered", "release_hold"].includes(item.status);
+  return <article className="orders-history-row">
+    <span className={success ? "orders-history-dot orders-history-dot--success" : "orders-history-dot"} />
+    <div>
+      <strong>{item.reference}</strong>
+      <span>{statusLabel(item.status)}</span>
+    </div>
+    <p>{item.productTitle}</p>
+    <small>{mode === "buyer" ? item.makerName : item.buyerName ?? "Buyer"} · Qty {item.quantity}</small>
+    {explorerUrl ? <a href={explorerUrl} target="_blank" rel="noreferrer">NFT #{proof?.tokenId ?? item.proofTokenId ?? "tx"} <ExternalLink size={13} /></a> : <em>{success ? "Proof pending" : "No proof"}</em>}
   </article>;
 }
 
