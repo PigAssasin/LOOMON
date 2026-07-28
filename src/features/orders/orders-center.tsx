@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import {
-  ArrowUpRight,
   Check,
   Clock3,
   PackageCheck,
@@ -11,6 +10,8 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { keccak256, toBytes } from "viem";
+import { usePublicClient, useWriteContract } from "wagmi";
 import { SiteHeader } from "@/src/components/site-header";
 import { ProductVisual } from "@/src/components/product-visual";
 import {
@@ -25,6 +26,12 @@ import {
 import { getProductBySlug, products } from "@/src/data/products";
 import { useLoomonSession } from "@/src/features/auth/use-loomon-session";
 import { sessionMatchesWallet } from "@/src/features/auth/sign-in-wallet";
+import { ARC_TESTNET } from "@/src/lib/arc";
+import {
+  LOOMON_QUOTE_DECISION_ADDRESS,
+  loomonQuoteDecisionAbi,
+  quoteDecisionCode,
+} from "@/src/lib/payments/quote-decision";
 
 type OrderMode = "buyer" | "seller";
 type BuyerTab = "requests" | "active" | "history";
@@ -84,6 +91,8 @@ export function OrdersCenter() {
   const [pendingAction, setPendingAction] = useState<PendingAction>();
   const [actionBusy, setActionBusy] = useState(false);
   const [claimableMakers, setClaimableMakers] = useState<Array<{ id: number; slug: string; display_name: string }>>([]);
+  const publicClient = usePublicClient({ chainId: ARC_TESTNET.id });
+  const { writeContractAsync } = useWriteContract();
 
   const loadSingleDemoSellerWorkspace = useCallback(async () => {
     if (!address || !isSingleDemoSeller(address)) return false;
@@ -243,6 +252,56 @@ export function OrdersCenter() {
     if (action === "accept") setSellerTab("active");
   }
 
+  async function transitionRequestOnchain(item: CommerceItem, action: "accept" | "reject") {
+    if (!publicClient) {
+      setError("Arc is temporarily unavailable. Please try again.");
+      return;
+    }
+    if (!isSingleDemoSeller(address)) {
+      setError("Switch to the Lò Mây seller wallet to sign this request decision.");
+      return;
+    }
+    setActionBusy(true);
+    setError("");
+    try {
+      const requestIdHash = keccak256(toBytes(item.id));
+      const decisionHash = keccak256(toBytes([
+        "loomon-quote-decision",
+        item.id,
+        item.reference,
+        action,
+      ].join(":")));
+      const transactionHash = await writeContractAsync({
+        address: LOOMON_QUOTE_DECISION_ADDRESS,
+        abi: loomonQuoteDecisionAbi,
+        functionName: "decide",
+        args: [requestIdHash, quoteDecisionCode[action], decisionHash],
+        chainId: ARC_TESTNET.id,
+      });
+      await publicClient.waitForTransactionReceipt({ hash: transactionHash });
+      const requestKey = crypto.randomUUID();
+      const response = await fetch(`/api/quote-requests/${item.id}/decision/confirm`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, requestKey, transactionHash }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(typeof body?.error === "string" ? body.error : "Quote decision could not be confirmed");
+      }
+      await loadWorkspace();
+      if (action === "accept") setSellerTab("active");
+      if (action === "reject") setSellerTab("history");
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "Arc quote decision failed";
+      setError(/user rejected|user denied|rejected the request/i.test(message)
+        ? "Transaction was cancelled in your wallet."
+        : message);
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   async function transitionOrder(
     item: CommerceItem,
     action: "mark_delivered" | "confirm_received" | "report_issue" | "cancel",
@@ -355,7 +414,7 @@ export function OrdersCenter() {
               mode="seller"
               busy={actionBusy}
               onRequestAction={(item, action) => {
-                if (action === "accept") void transitionRequest(item, action);
+                if (action === "accept" || action === "reject") void transitionRequestOnchain(item, action);
                 else setPendingAction({ item, action });
               }}
               onOrderAction={(item, action) => {
@@ -455,7 +514,6 @@ function CommerceRow({
       {item.kind === "order" && mode === "seller" && ["seller_accepted", "in_progress"].includes(item.status) ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "mark_delivered")} disabled={busy}><PackageCheck size={16} /> Mark delivered</button> : null}
       {item.kind === "order" && mode === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "confirm_received")} disabled={busy}><Check size={16} /> Confirm received</button> : null}
       {item.kind === "order" && ["seller_accepted", "in_progress"].includes(item.status) ? <button type="button" onClick={() => onOrderAction(item, "cancel")} disabled={busy}>Cancel</button> : null}
-      <Link href={href} aria-label={`Open ${item.reference}`}><ArrowUpRight size={18} /></Link>
     </div>
   </article>;
 }
