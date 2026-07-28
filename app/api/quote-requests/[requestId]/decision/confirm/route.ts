@@ -19,6 +19,30 @@ const requestSchema = z.object({
   transactionHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
 });
 
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getReceiptWithBackoff(
+  client: ReturnType<typeof createPublicClient>,
+  hash: `0x${string}`,
+) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      return await client.getTransactionReceipt({ hash });
+    } catch (cause) {
+      lastError = cause;
+      const message = cause instanceof Error ? cause.message : String(cause);
+      if (/request limit reached|rate limit|too many requests|32011/i.test(message)) {
+        throw new Error("Arc RPC is rate-limited. Please retry in a few seconds.");
+      }
+      await delay(1_000 + attempt * 700);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Arc transaction was not confirmed yet");
+}
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ requestId: string }> },
@@ -36,9 +60,10 @@ export async function POST(
       chain: arcTestnet,
       transport: http(ARC_TESTNET.rpcUrl),
     });
-    const receipt = await client.getTransactionReceipt({
-      hash: input.data.transactionHash as `0x${string}`,
-    });
+    const receipt = await getReceiptWithBackoff(
+      client,
+      input.data.transactionHash as `0x${string}`,
+    );
     if (
       receipt.status !== "success"
       || getAddress(receipt.from) !== getAddress(SINGLE_DEMO_SELLER_ADDRESS)

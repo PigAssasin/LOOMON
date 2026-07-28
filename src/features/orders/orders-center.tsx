@@ -9,9 +9,9 @@ import {
   Store,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { keccak256, toBytes } from "viem";
-import { usePublicClient, useWriteContract } from "wagmi";
+import { useWriteContract } from "wagmi";
 import { SiteHeader } from "@/src/components/site-header";
 import { ProductVisual } from "@/src/components/product-visual";
 import {
@@ -90,8 +90,8 @@ export function OrdersCenter() {
   const [needsWalletVerification, setNeedsWalletVerification] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>();
   const [actionBusy, setActionBusy] = useState(false);
+  const actionBusyRef = useRef(false);
   const [claimableMakers, setClaimableMakers] = useState<Array<{ id: number; slug: string; display_name: string }>>([]);
-  const publicClient = usePublicClient({ chainId: ARC_TESTNET.id });
   const { writeContractAsync } = useWriteContract();
 
   const loadSingleDemoSellerWorkspace = useCallback(async () => {
@@ -107,15 +107,17 @@ export function OrdersCenter() {
     return true;
   }, [address]);
 
-  const loadWorkspace = useCallback(async () => {
+  const loadWorkspace = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!supabase) {
       setError("LOOMON is temporarily unavailable.");
       setLoading(false);
       return;
     }
 
-    setLoading(true);
-    setError("");
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
 
     const { data: authData } = await supabase.auth.getSession();
     if (!authData.session) {
@@ -123,7 +125,7 @@ export function OrdersCenter() {
         setWorkspace(emptyCommerceWorkspace);
         setNeedsWalletVerification(Boolean(isConnected));
       }
-      setLoading(false);
+      if (!silent) setLoading(false);
       return;
     }
     if (isConnected && !sessionMatchesWallet(authData.session, address)) {
@@ -132,7 +134,7 @@ export function OrdersCenter() {
         setWorkspace(emptyCommerceWorkspace);
         setNeedsWalletVerification(true);
       }
-      setLoading(false);
+      if (!silent) setLoading(false);
       return;
     }
     setNeedsWalletVerification(false);
@@ -147,7 +149,7 @@ export function OrdersCenter() {
       setWorkspace(commerceWorkspaceSchema.parse(data));
     }
     setClaimableMakers(makers ?? []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, [address, isConnected, loadSingleDemoSellerWorkspace, supabase]);
 
   useEffect(() => {
@@ -162,12 +164,15 @@ export function OrdersCenter() {
     const channel = supabase
       .channel("loomon-commerce-workspace")
       .on("postgres_changes", { event: "*", schema: "commerce", table: "quote_requests" }, () => {
+        if (actionBusyRef.current) return;
         void loadWorkspace();
       })
       .on("postgres_changes", { event: "*", schema: "commerce", table: "orders" }, () => {
+        if (actionBusyRef.current) return;
         void loadWorkspace();
       })
       .on("postgres_changes", { event: "*", schema: "commerce", table: "order_proof_nfts" }, () => {
+        if (actionBusyRef.current) return;
         void loadWorkspace();
       })
       .subscribe();
@@ -253,15 +258,12 @@ export function OrdersCenter() {
   }
 
   async function transitionRequestOnchain(item: CommerceItem, action: "accept" | "reject") {
-    if (!publicClient) {
-      setError("Arc is temporarily unavailable. Please try again.");
-      return;
-    }
     if (!isSingleDemoSeller(address)) {
       setError("Switch to the Lò Mây seller wallet to sign this request decision.");
       return;
     }
     setActionBusy(true);
+    actionBusyRef.current = true;
     setError("");
     try {
       const requestIdHash = keccak256(toBytes(item.id));
@@ -278,7 +280,6 @@ export function OrdersCenter() {
         args: [requestIdHash, quoteDecisionCode[action], decisionHash],
         chainId: ARC_TESTNET.id,
       });
-      await publicClient.waitForTransactionReceipt({ hash: transactionHash });
       const requestKey = crypto.randomUUID();
       const response = await fetch(`/api/quote-requests/${item.id}/decision/confirm`, {
         method: "POST",
@@ -289,15 +290,22 @@ export function OrdersCenter() {
       if (!response.ok) {
         throw new Error(typeof body?.error === "string" ? body.error : "Quote decision could not be confirmed");
       }
-      await loadWorkspace();
       if (action === "accept") setSellerTab("active");
       if (action === "reject") setSellerTab("history");
+      setWorkspace((current) => ({
+        ...current,
+        sellingRequests: current.sellingRequests.filter((request) => request.id !== item.id),
+      }));
+      await loadWorkspace({ silent: true });
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Arc quote decision failed";
       setError(/user rejected|user denied|rejected the request/i.test(message)
         ? "Transaction was cancelled in your wallet."
+        : /request limit reached|rate limit|too many requests|32011/i.test(message)
+          ? "Arc RPC is rate-limited for a moment. Wait a few seconds and try again."
         : message);
     } finally {
+      actionBusyRef.current = false;
       setActionBusy(false);
     }
   }
