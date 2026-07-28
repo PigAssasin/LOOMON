@@ -33,6 +33,8 @@ type PendingAction = {
   action: "reject" | "request_changes" | "withdraw" | "cancel";
 };
 
+const SINGLE_DEMO_SELLER_ADDRESS = "0xd59aa8db407d4219fe4b104ca4142df14301dec4";
+
 const actionCopy: Record<PendingAction["action"], { title: string; placeholder: string; confirm: string }> = {
   reject: {
     title: "Reject this request?",
@@ -58,6 +60,15 @@ const actionCopy: Record<PendingAction["action"], { title: string; placeholder: 
 
 export function OrdersCenter() {
   const session = useLoomonSession();
+  const {
+    address,
+    authTick,
+    busy: sessionBusy,
+    ensureSession,
+    error: sessionError,
+    isConnected,
+    supabase,
+  } = session;
   const [mode, setMode] = useState<OrderMode>("buyer");
   const [buyerTab, setBuyerTab] = useState<BuyerTab>("requests");
   const [sellerTab, setSellerTab] = useState<SellerTab>("incoming");
@@ -69,7 +80,7 @@ export function OrdersCenter() {
   const [claimableMakers, setClaimableMakers] = useState<Array<{ id: number; slug: string; display_name: string }>>([]);
 
   const loadWorkspace = useCallback(async () => {
-    if (!session.supabase) {
+    if (!supabase) {
       setError("LOOMON is temporarily unavailable.");
       setLoading(false);
       return;
@@ -77,7 +88,16 @@ export function OrdersCenter() {
 
     setLoading(true);
     setError("");
-    const { data: authData } = await session.supabase.auth.getSession();
+    if (isConnected) {
+      const ready = await ensureSession();
+      if (!ready) {
+        setWorkspace(emptyCommerceWorkspace);
+        setLoading(false);
+        return;
+      }
+    }
+
+    const { data: authData } = await supabase.auth.getSession();
     if (!authData.session) {
       setWorkspace(emptyCommerceWorkspace);
       setLoading(false);
@@ -85,8 +105,8 @@ export function OrdersCenter() {
     }
 
     const [{ data, error: workspaceError }, { data: makers }] = await Promise.all([
-      session.supabase.rpc("get_my_commerce_workspace"),
-      session.supabase.rpc("list_claimable_demo_makers"),
+      supabase.rpc("get_my_commerce_workspace"),
+      supabase.rpc("list_claimable_demo_makers"),
     ]);
     if (workspaceError) {
       setError("Your orders could not be loaded. Please try again.");
@@ -95,18 +115,18 @@ export function OrdersCenter() {
     }
     setClaimableMakers(makers ?? []);
     setLoading(false);
-  }, [session.supabase]);
+  }, [ensureSession, isConnected, supabase]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       void loadWorkspace();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [loadWorkspace]);
+  }, [loadWorkspace, address, authTick, isConnected]);
 
   useEffect(() => {
-    if (!session.supabase) return;
-    const channel = session.supabase
+    if (!supabase) return;
+    const channel = supabase
       .channel("loomon-commerce-workspace")
       .on("postgres_changes", { event: "*", schema: "commerce", table: "quote_requests" }, () => {
         void loadWorkspace();
@@ -119,9 +139,9 @@ export function OrdersCenter() {
       })
       .subscribe();
     return () => {
-      void session.supabase?.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
-  }, [loadWorkspace, session.supabase]);
+  }, [loadWorkspace, supabase]);
 
   const buying = useMemo(
     () => [...workspace.buyingRequests, ...workspace.buyingOrders],
@@ -131,6 +151,9 @@ export function OrdersCenter() {
     () => [...workspace.sellingRequests, ...workspace.sellingOrders],
     [workspace],
   );
+  const connectedAddressLabel = address
+    ? `${address.slice(0, 6)}…${address.slice(-4)}`
+    : "";
 
   const buyerCounts = {
     requests: buying.filter((item) => buyingStage(item) === "requests").length,
@@ -143,14 +166,20 @@ export function OrdersCenter() {
     history: selling.filter((item) => sellingStage(item) === "history").length,
   };
 
+  useEffect(() => {
+    if (address?.toLowerCase() === SINGLE_DEMO_SELLER_ADDRESS) {
+      window.queueMicrotask(() => setMode("seller"));
+    }
+  }, [address]);
+
   async function connectAndLoad() {
-    if (await session.ensureSession()) await loadWorkspace();
+    if (await ensureSession()) await loadWorkspace();
   }
 
   async function claimMaker(makerId: number) {
-    if (!session.supabase || !(await session.ensureSession())) return;
+    if (!supabase || !(await ensureSession())) return;
     setActionBusy(true);
-    const { error: claimError } = await session.supabase.rpc("claim_demo_maker", {
+    const { error: claimError } = await supabase.rpc("claim_demo_maker", {
       p_maker_id: makerId,
     });
     setActionBusy(false);
@@ -170,10 +199,10 @@ export function OrdersCenter() {
     action: "accept" | "reject" | "request_changes" | "withdraw",
     reason = "",
   ) {
-    if (!session.supabase) return;
+    if (!supabase) return;
     setActionBusy(true);
     setError("");
-    const { error: actionError } = await session.supabase.rpc("transition_quote_request", {
+    const { error: actionError } = await supabase.rpc("transition_quote_request", {
       p_request_id: item.id,
       p_action: action,
       p_reason: reason,
@@ -194,10 +223,10 @@ export function OrdersCenter() {
     action: "mark_delivered" | "confirm_received" | "report_issue" | "cancel",
     reason = "",
   ) {
-    if (!session.supabase) return;
+    if (!supabase) return;
     setActionBusy(true);
     setError("");
-    const { data, error: actionError } = await session.supabase.rpc("transition_demo_order", {
+    const { data, error: actionError } = await supabase.rpc("transition_demo_order", {
       p_order_id: item.id,
       p_action: action,
       p_reason: reason,
@@ -237,24 +266,27 @@ export function OrdersCenter() {
     <OrdersShell>
       <header className="orders-center-heading">
         <div><h1>Orders</h1><p>Requests, active work, delivery and history in one place.</p></div>
-        <button className="ghost-button" type="button" onClick={() => void loadWorkspace()}>
-          <Clock3 size={16} /> Refresh
-        </button>
+        <div className="orders-heading-actions">
+          {connectedAddressLabel ? <span className="orders-wallet-pill">{connectedAddressLabel}</span> : null}
+          <button className="ghost-button" type="button" disabled={loading || sessionBusy} onClick={() => void loadWorkspace()}>
+            <Clock3 size={16} /> {loading || sessionBusy ? "Syncing" : "Refresh"}
+          </button>
+        </div>
       </header>
 
-      {error || session.error ? <p className="form-error" role="alert">{error || session.error}</p> : null}
+      {error || sessionError ? <p className="form-error" role="alert">{error || sessionError}</p> : null}
 
       <nav className="orders-mode-switch" aria-label="Order workspace">
         <button className={mode === "buyer" ? "active" : ""} aria-pressed={mode === "buyer"} onClick={() => setMode("buyer")} type="button"><ShoppingBag size={19} /><span><strong>Buying</strong><small>{buying.length} total</small></span></button>
         <button className={mode === "seller" ? "active" : ""} aria-pressed={mode === "seller"} onClick={() => setMode("seller")} type="button"><Store size={19} /><span><strong>Selling</strong><small>{selling.length} total</small></span></button>
       </nav>
 
-      {!isAuthenticated && !session.isConnected ? (
+      {!isAuthenticated && !isConnected ? (
         <OrderStageEmpty
           index="01"
           title="Connect your wallet to view orders."
           detail="Your Buying and Selling activity is private to your LOOMON wallet."
-          action={<button className="gradient-stroke-button" type="button" onClick={() => void connectAndLoad()} disabled={session.busy}>Connect wallet</button>}
+          action={<button className="gradient-stroke-button" type="button" onClick={() => void connectAndLoad()} disabled={sessionBusy}>Connect wallet</button>}
         />
       ) : mode === "buyer" ? (
         <>

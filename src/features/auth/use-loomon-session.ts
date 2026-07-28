@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { useAccount, useDisconnect } from "wagmi";
 import { ensureWalletSession } from "@/src/features/auth/sign-in-wallet";
@@ -12,7 +12,25 @@ export function useLoomonSession() {
   const { openConnectModal } = useConnectModal();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [authTick, setAuthTick] = useState(0);
   const supabase = useMemo(() => createClient(), []);
+
+  useEffect(() => {
+    if (!supabase) return;
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      setAuthTick((tick) => tick + 1);
+    });
+    return () => subscription.unsubscribe();
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!supabase || isConnected) return;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (data.session) void supabase.auth.signOut();
+    });
+  }, [isConnected, supabase]);
 
   const ensureSession = useCallback(async () => {
     setError("");
@@ -60,6 +78,7 @@ export function useLoomonSession() {
 
   return {
     address,
+    authTick,
     busy,
     ensureSession,
     error,

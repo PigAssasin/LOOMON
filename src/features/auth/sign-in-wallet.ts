@@ -55,6 +55,24 @@ async function signInWithBridge(
   if (sessionError) throw sessionError;
 }
 
+async function currentSessionWalletMatches(
+  supabase: SupabaseClient<Database>,
+  address: `0x${string}`,
+) {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return false;
+
+  const metadataAddress =
+    typeof session.user.app_metadata?.wallet_address === "string"
+      ? session.user.app_metadata.wallet_address
+      : typeof session.user.user_metadata?.wallet_address === "string"
+        ? session.user.user_metadata.wallet_address
+      : undefined;
+  return metadataAddress?.toLowerCase() === address.toLowerCase();
+}
+
 export async function ensureWalletSession({
   address,
   connector,
@@ -69,7 +87,10 @@ export async function ensureWalletSession({
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (session) return session;
+  if (session) {
+    if (await currentSessionWalletMatches(supabase, address)) return session;
+    await supabase.auth.signOut();
+  }
 
   const wallet = await connector.getProvider();
   const { data, error } = await supabase.auth.signInWithWeb3({
