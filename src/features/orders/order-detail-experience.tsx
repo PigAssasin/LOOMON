@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getAddress, keccak256, toBytes } from "viem";
-import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import { useAccount, useWriteContract } from "wagmi";
 import { SiteHeader } from "@/src/components/site-header";
 import {
   commerceWorkspaceSchema,
@@ -63,7 +63,6 @@ type BriefAssets = {
 export function OrderDetailExperience({ reference }: { reference: string }) {
   const session = useLoomonSession();
   const { address } = useAccount();
-  const publicClient = usePublicClient({ chainId: ARC_TESTNET.id });
   const { writeContractAsync } = useWriteContract();
   const [item, setItem] = useState<CommerceItem>();
   const [escrow, setEscrow] = useState<EscrowOrderContext>();
@@ -247,7 +246,7 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
   }
 
   async function transitionEscrow(action: EscrowAction, reason = "") {
-    if (!item || !escrow || !publicClient || !address) return;
+    if (!item || !escrow || !address) return;
     setBusy(true);
     setError("");
     try {
@@ -312,10 +311,6 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
         });
       }
 
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash: transactionHash,
-      });
-      if (receipt.status !== "success") throw new Error("Arc transaction reverted");
       const response = await fetch(`/api/orders/${item.id}/escrow/confirm`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -400,10 +395,10 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
             <button className="gradient-stroke-button" disabled={busy} type="button" onClick={() => void transitionEscrow("confirm_completion", "Buyer confirmed successful completion")}><Check size={17} /> Confirm completion</button>
             <button className="ghost-button" disabled={busy} type="button" onClick={() => { const reason = window.prompt("Describe the issue"); if (reason) void transitionEscrow("dispute", reason); }}>Report an issue</button>
           </> : null}
-          {escrow && role === "buyer" && item.status === "escrow_funded" ? <button className="ghost-button" disabled={busy} type="button" onClick={() => { const reason = window.prompt("Why are you cancelling before production?"); if (reason) void transitionEscrow("cancel", reason); }}>Cancel and refund</button> : null}
-          {escrow && role === "seller" && ["escrow_funded", "in_production", "seller_marked_delivered"].includes(item.status) ? <button className="ghost-button" disabled={busy} type="button" onClick={() => { const reason = window.prompt("Why are you refunding this buyer?"); if (reason) void transitionEscrow("refund", reason); }}>Refund buyer</button> : null}
+          {escrow && role === "buyer" && item.status === "escrow_funded" ? <button className="ghost-button" disabled={busy} type="button" onClick={() => void transitionEscrow("cancel", "Buyer cancelled before production")}>Cancel and refund</button> : null}
+          {escrow && role === "seller" && ["escrow_funded", "in_production", "seller_marked_delivered"].includes(item.status) ? <button className="ghost-button" disabled={busy} type="button" onClick={() => void transitionEscrow("refund", "Seller refunded the buyer")}>Refund buyer</button> : null}
           {escrow && role === "seller" && item.status === "release_hold" ? <button className="gradient-stroke-button" disabled={busy || sellerClaimIsLocked} type="button" onClick={() => void transitionEscrow("claim")}><Check size={17} /> {sellerClaimIsLocked && sellerClaimableAt ? `Claim after ${sellerClaimableAt.toLocaleDateString()}` : "Claim USDC"}</button> : null}
-          {!escrow && role === "seller" && ["seller_accepted", "in_progress"].includes(item.status) ? <button className="gradient-stroke-button" disabled={busy} type="button" onClick={() => void transition("mark_delivered")}><PackageCheck size={17} /> Mark delivered</button> : null}
+          {!escrow && ["seller_accepted", "in_progress"].includes(item.status) ? <p className="order-chat-empty">This is a legacy demo order without Arc escrow. Create a new paid order to use onchain delivery, refund and proof minting.</p> : null}
           {!escrow && role === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" disabled={busy} type="button" onClick={() => void transition("confirm_received")}><Check size={17} /> Confirm received</button> : null}
         </div>
       </section>

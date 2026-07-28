@@ -13,6 +13,7 @@ import {
 import { ARC_TESTNET } from "@/src/lib/arc";
 import { arcTestnet } from "@/src/lib/chains";
 import { loomonEscrowPoolAbi } from "@/src/lib/payments/escrow-pool";
+import { mintOrderProofsForParticipants } from "@/src/server/commerce/order-proof-service";
 import { createAdminClient } from "@/src/lib/supabase/admin";
 import type { Json } from "@/src/lib/supabase/database.types";
 import { createClient } from "@/src/lib/supabase/server";
@@ -28,6 +29,30 @@ const eventByAction: Record<EscrowAction, string> = {
 };
 
 const SINGLE_DEMO_SELLER_ADDRESS = "0xd59aa8db407d4219fe4b104ca4142df14301dec4";
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getReceiptWithBackoff(
+  client: ReturnType<typeof createPublicClient>,
+  hash: `0x${string}`,
+) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      return await client.getTransactionReceipt({ hash });
+    } catch (cause) {
+      lastError = cause;
+      const message = cause instanceof Error ? cause.message : String(cause);
+      if (/request limit reached|rate limit|too many requests|32011/i.test(message)) {
+        throw new Error("Arc RPC is rate-limited. Please retry in a few seconds.");
+      }
+      await delay(1_000 + attempt * 700);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Arc transaction was not confirmed yet");
+}
 
 export async function POST(
   request: Request,
@@ -81,9 +106,10 @@ export async function POST(
       chain: arcTestnet,
       transport: http(ARC_TESTNET.rpcUrl),
     });
-    const receipt = await client.getTransactionReceipt({
-      hash: input.data.transactionHash as `0x${string}`,
-    });
+    const receipt = await getReceiptWithBackoff(
+      client,
+      input.data.transactionHash as `0x${string}`,
+    );
     const expectedActor =
       expectedRole === "buyer" ? order.buyerAddress : order.sellerAddress;
     if (
@@ -132,7 +158,27 @@ export async function POST(
       },
     );
     if (projectionError) throw projectionError;
-    return NextResponse.json(projected);
+
+    let proofs: unknown = null;
+    if (input.data.action === "mark_delivered") {
+      try {
+        proofs = await mintOrderProofsForParticipants({
+          orderId: order.orderId,
+          requestKey: crypto.randomUUID(),
+        });
+      } catch (proofError) {
+        proofs = {
+          error:
+            proofError instanceof Error
+              ? proofError.message
+              : "Order proof minting will retry safely.",
+        };
+      }
+    }
+
+    const projectedPayload =
+      projected && typeof projected === "object" ? projected as Record<string, unknown> : {};
+    return NextResponse.json({ ...projectedPayload, proofs });
   } catch (cause) {
     const message =
       cause instanceof Error

@@ -37,6 +37,7 @@ type CommerceOrder = {
 
 type WalletAccount = {
   address: `0x${string}`;
+  user_id?: string;
 };
 
 export type PurchasedOrderProof = OrderProofRecord & {
@@ -45,6 +46,12 @@ export type PurchasedOrderProof = OrderProofRecord & {
 
 export class OrderProofAccessError extends Error {}
 export class OrderProofConfigurationError extends Error {}
+
+type ProofParticipant = {
+  role: "buyer" | "seller";
+  userId: string;
+  walletAddress: `0x${string}`;
+};
 
 async function callServerRpc(
   admin: ReturnType<typeof createAdminClient>,
@@ -241,4 +248,208 @@ export async function mintOrderProofForBuyer(input: {
   }
 
   return { proof, orderNumber: order.order_number, mintConfigured: true };
+}
+
+export async function mintOrderProofsForParticipants(input: {
+  orderId: string;
+  requestKey: string;
+}) {
+  const admin = createAdminClient();
+  const { data: contextData, error: contextError } = await callServerRpc(
+    admin,
+    "server_get_order_participant_proof_context",
+    { target_order_id: input.orderId },
+  );
+  if (contextError) throw contextError;
+  if (!contextData || typeof contextData !== "object") {
+    throw new OrderProofAccessError("Order proof context not found.");
+  }
+
+  const context = contextData as {
+    order?: CommerceOrder & { maker_id?: number };
+    buyerWallet?: WalletAccount | null;
+    sellerWallet?: WalletAccount | null;
+  };
+  if (!context.order) throw new OrderProofAccessError("Order not found.");
+
+  const participants: ProofParticipant[] = [];
+  if (context.buyerWallet?.address) {
+    participants.push({
+      role: "buyer",
+      userId: context.order.buyer_id,
+      walletAddress: context.buyerWallet.address,
+    });
+  }
+  if (context.sellerWallet?.address && context.sellerWallet.user_id) {
+    participants.push({
+      role: "seller",
+      userId: context.sellerWallet.user_id,
+      walletAddress: context.sellerWallet.address,
+    });
+  }
+  if (!participants.length) {
+    throw new OrderProofAccessError("No verified participant wallets found.");
+  }
+
+  const results: Array<{ role: ProofParticipant["role"]; proof: OrderProofRecord }> = [];
+  for (const participant of participants) {
+    const proof = await mintParticipantProof({
+      admin,
+      order: context.order,
+      participant,
+      requestKey:
+        participant.role === "buyer" ? input.requestKey : crypto.randomUUID(),
+    });
+    results.push({ role: participant.role, proof });
+  }
+
+  return {
+    orderNumber: context.order.order_number,
+    proofs: results,
+    mintConfigured: true,
+  };
+}
+
+async function mintParticipantProof(input: {
+  admin: ReturnType<typeof createAdminClient>;
+  order: CommerceOrder;
+  participant: ProofParticipant;
+  requestKey: string;
+}) {
+  const orderHash = keccak256(
+    toBytes(`loomon-order-proof:${input.participant.role}:${input.order.id}`),
+  );
+  const snapshotHash = keccak256(
+    toBytes(
+      JSON.stringify({
+        role: input.participant.role,
+        source: buildOrderProofSnapshotHashInput({
+          orderId: input.order.id,
+          acceptedQuoteVersionId: input.order.accepted_quote_version_id,
+          depositInvoiceId: input.order.deposit_invoice_id,
+        }),
+      }),
+    ),
+  );
+
+  const { data: preparedData, error: prepareError } = await callServerRpc(
+    input.admin,
+    "server_prepare_participant_order_proof",
+    {
+      request_key: input.requestKey,
+      target_order_hash: orderHash,
+      target_order_id: input.order.id,
+      target_owner_user_id: input.participant.userId,
+      target_recipient_wallet_address: input.participant.walletAddress,
+      target_snapshot_hash: snapshotHash,
+    },
+  );
+  if (prepareError) throw prepareError;
+
+  let proof = parseOrderProofRecord(preparedData);
+  if (proof.mintStatus === "confirmed") return proof;
+
+  const contractAddress = process.env
+    .LOOMON_ORDER_PROOF_ADDRESS as `0x${string}` | undefined;
+  const minterKey = process.env
+    .ARC_PROOF_MINTER_PRIVATE_KEY as `0x${string}` | undefined;
+  if (
+    !contractAddress?.match(/^0x[0-9a-fA-F]{40}$/) ||
+    !minterKey?.match(/^0x[0-9a-fA-F]{64}$/)
+  ) {
+    return proof;
+  }
+
+  const account = privateKeyToAccount(minterKey);
+  const walletClient = createWalletClient({
+    account,
+    chain: arcTestnet,
+    transport: http(ARC_TESTNET.rpcUrl),
+  });
+  const publicClient = createPublicClient({
+    chain: arcTestnet,
+    transport: http(ARC_TESTNET.rpcUrl),
+  });
+
+  let transactionHash: `0x${string}` | null = null;
+  try {
+    transactionHash = await walletClient.writeContract({
+      address: getAddress(contractAddress),
+      abi: proofAbi,
+      functionName: "mintOrderProof",
+      args: [getAddress(input.participant.walletAddress), orderHash, snapshotHash],
+    });
+
+    const { data: submittedData, error: submittedError } = await input.admin.rpc(
+      "server_mark_order_proof_submitted",
+      {
+        target_contract_address: contractAddress,
+        target_proof_id: proof.id,
+        target_transaction_hash: transactionHash,
+      },
+    );
+    if (submittedError) throw submittedError;
+    proof = parseOrderProofRecord(submittedData);
+
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash: transactionHash,
+    });
+    if (receipt.status !== "success") throw new Error("MINT_TRANSACTION_REVERTED");
+
+    const events = parseEventLogs({
+      abi: proofAbi,
+      eventName: "OrderProofMinted",
+      logs: receipt.logs,
+      strict: true,
+    });
+    const event = events.find(
+      (candidate) =>
+        candidate.args.orderHash === orderHash &&
+        getAddress(candidate.args.recipient) ===
+          getAddress(input.participant.walletAddress),
+    );
+    if (!event) throw new Error("MINT_EVENT_NOT_FOUND");
+
+    const metadataUri = await publicClient.readContract({
+      address: getAddress(contractAddress),
+      abi: proofAbi,
+      functionName: "tokenURI",
+      args: [event.args.tokenId],
+    });
+    const payloadHash = keccak256(
+      toBytes(
+        JSON.stringify({
+          orderHash,
+          recipient: getAddress(input.participant.walletAddress),
+          role: input.participant.role,
+          snapshotHash,
+          tokenId: event.args.tokenId.toString(),
+        }),
+      ),
+    );
+
+    const { data: confirmedData, error: confirmedError } = await input.admin.rpc(
+      "server_confirm_order_proof",
+      {
+        target_block_number: Number(receipt.blockNumber),
+        target_log_index: event.logIndex,
+        target_metadata_uri: metadataUri,
+        target_payload_hash: payloadHash,
+        target_proof_id: proof.id,
+        target_token_id: Number(event.args.tokenId),
+        target_transaction_hash: transactionHash,
+      },
+    );
+    if (confirmedError) throw confirmedError;
+    proof = parseOrderProofRecord(confirmedData);
+  } catch (error) {
+    await input.admin.rpc("server_fail_order_proof", {
+      target_failure_code:
+        error instanceof Error ? error.message : "ORDER_PROOF_MINT_FAILED",
+      target_proof_id: proof.id,
+    });
+    throw error;
+  }
+
+  return proof;
 }
