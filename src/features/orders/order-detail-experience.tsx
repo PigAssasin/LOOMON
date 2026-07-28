@@ -27,9 +27,16 @@ import {
   type EscrowAction,
   type EscrowOrderContext,
 } from "@/src/domain/escrow-order";
+import { sessionMatchesWallet } from "@/src/features/auth/sign-in-wallet";
 import { useLoomonSession } from "@/src/features/auth/use-loomon-session";
 import { ARC_TESTNET } from "@/src/lib/arc";
 import { loomonEscrowPoolAbi } from "@/src/lib/payments/escrow-pool";
+
+const SINGLE_DEMO_SELLER_ADDRESS = "0xd59aa8db407d4219fe4b104ca4142df14301dec4";
+
+function isSingleDemoSeller(address?: string) {
+  return address?.toLowerCase() === SINGLE_DEMO_SELLER_ADDRESS;
+}
 
 type ThreadMessage = {
   id: string;
@@ -73,23 +80,47 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
   const load = useCallback(async () => {
     if (!session.supabase) return;
     setLoading(true);
-    const { data, error: workspaceError } = await session.supabase.rpc("get_my_commerce_workspace");
-    if (workspaceError) {
-      setError("This order could not be loaded.");
-      setLoading(false);
-      return;
+
+    const { data: authData } = await session.supabase.auth.getSession();
+    let workspace = emptyCommerceWorkspace;
+    let loadedAsDemoSeller = false;
+    const demoSellerAddress = isSingleDemoSeller(address) ? address : undefined;
+
+    if (
+      demoSellerAddress
+      && (!authData.session || !sessionMatchesWallet(authData.session, address))
+    ) {
+      const response = await fetch(
+        `/api/orders/demo-seller-workspace?address=${encodeURIComponent(demoSellerAddress)}`,
+      );
+      if (response.ok) {
+        workspace = commerceWorkspaceSchema.parse(await response.json());
+        loadedAsDemoSeller = true;
+      }
+    } else {
+      const { data, error: workspaceError } = await session.supabase.rpc("get_my_commerce_workspace");
+      if (workspaceError) {
+        setError("This order could not be loaded.");
+        setLoading(false);
+        return;
+      }
+      workspace = commerceWorkspaceSchema.parse(data ?? emptyCommerceWorkspace);
     }
-    const workspace = commerceWorkspaceSchema.parse(data ?? emptyCommerceWorkspace);
+
     const buyerItem = workspace.buyingOrders.find((order) => order.reference === reference);
     const sellerItem = workspace.sellingOrders.find((order) => order.reference === reference);
     const found = buyerItem ?? sellerItem;
     setItem(found);
     setRole(buyerItem ? "buyer" : "seller");
     if (found?.kind === "order") {
-      const { data: escrowData } = await session.supabase.rpc(
-        "get_order_escrow_context",
-        { p_order_id: found.id },
-      );
+      const escrowData = loadedAsDemoSeller && demoSellerAddress
+        ? await fetch(
+          `/api/orders/demo-seller-escrow?address=${encodeURIComponent(demoSellerAddress)}&orderId=${encodeURIComponent(found.id)}`,
+        ).then((response) => response.ok ? response.json() : undefined)
+        : (await session.supabase.rpc(
+          "get_order_escrow_context",
+          { p_order_id: found.id },
+        )).data;
       setEscrow(
         escrowData ? escrowOrderContextSchema.safeParse(escrowData).data : undefined,
       );
@@ -106,7 +137,7 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
       setMessages(Array.isArray(threadData) ? threadData as ThreadMessage[] : []);
     }
     setLoading(false);
-  }, [reference, session.supabase]);
+  }, [address, reference, session.supabase]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
