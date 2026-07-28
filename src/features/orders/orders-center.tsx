@@ -24,6 +24,7 @@ import {
 } from "@/src/domain/commerce-workspace";
 import { getProductBySlug, products } from "@/src/data/products";
 import { useLoomonSession } from "@/src/features/auth/use-loomon-session";
+import { sessionMatchesWallet } from "@/src/features/auth/sign-in-wallet";
 
 type OrderMode = "buyer" | "seller";
 type BuyerTab = "requests" | "active" | "history";
@@ -75,6 +76,7 @@ export function OrdersCenter() {
   const [workspace, setWorkspace] = useState<CommerceWorkspace>(emptyCommerceWorkspace);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [needsWalletVerification, setNeedsWalletVerification] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>();
   const [actionBusy, setActionBusy] = useState(false);
   const [claimableMakers, setClaimableMakers] = useState<Array<{ id: number; slug: string; display_name: string }>>([]);
@@ -88,21 +90,22 @@ export function OrdersCenter() {
 
     setLoading(true);
     setError("");
-    if (isConnected) {
-      const ready = await ensureSession();
-      if (!ready) {
-        setWorkspace(emptyCommerceWorkspace);
-        setLoading(false);
-        return;
-      }
-    }
 
     const { data: authData } = await supabase.auth.getSession();
     if (!authData.session) {
       setWorkspace(emptyCommerceWorkspace);
+      setNeedsWalletVerification(Boolean(isConnected));
       setLoading(false);
       return;
     }
+    if (isConnected && !sessionMatchesWallet(authData.session, address)) {
+      await supabase.auth.signOut();
+      setWorkspace(emptyCommerceWorkspace);
+      setNeedsWalletVerification(true);
+      setLoading(false);
+      return;
+    }
+    setNeedsWalletVerification(false);
 
     const [{ data, error: workspaceError }, { data: makers }] = await Promise.all([
       supabase.rpc("get_my_commerce_workspace"),
@@ -115,7 +118,7 @@ export function OrdersCenter() {
     }
     setClaimableMakers(makers ?? []);
     setLoading(false);
-  }, [ensureSession, isConnected, supabase]);
+  }, [address, isConnected, supabase]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -173,6 +176,7 @@ export function OrdersCenter() {
   }, [address]);
 
   async function connectAndLoad() {
+    setNeedsWalletVerification(false);
     if (await ensureSession()) await loadWorkspace();
   }
 
@@ -281,7 +285,14 @@ export function OrdersCenter() {
         <button className={mode === "seller" ? "active" : ""} aria-pressed={mode === "seller"} onClick={() => setMode("seller")} type="button"><Store size={19} /><span><strong>Selling</strong><small>{selling.length} total</small></span></button>
       </nav>
 
-      {!isAuthenticated && !isConnected ? (
+      {needsWalletVerification ? (
+        <OrderStageEmpty
+          index="01"
+          title="Verify this wallet once."
+          detail="This keeps buyer and seller workspaces separated. LOOMON will not ask again unless you switch wallets."
+          action={<button className="gradient-stroke-button" type="button" onClick={() => void connectAndLoad()} disabled={sessionBusy}>Verify wallet</button>}
+        />
+      ) : !isAuthenticated && !isConnected ? (
         <OrderStageEmpty
           index="01"
           title="Connect your wallet to view orders."

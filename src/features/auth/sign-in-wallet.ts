@@ -1,4 +1,5 @@
 import type { Connector } from "wagmi";
+import type { Session } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/src/lib/supabase/database.types";
 
@@ -55,6 +56,22 @@ async function signInWithBridge(
   if (sessionError) throw sessionError;
 }
 
+export function sessionWalletAddress(session: Session | null) {
+  if (!session) return undefined;
+  const metadataAddress =
+    typeof session.user.app_metadata?.wallet_address === "string"
+      ? session.user.app_metadata.wallet_address
+      : typeof session.user.user_metadata?.wallet_address === "string"
+        ? session.user.user_metadata.wallet_address
+      : undefined;
+  return metadataAddress?.toLowerCase();
+}
+
+export function sessionMatchesWallet(session: Session | null, address?: `0x${string}`) {
+  const metadataAddress = sessionWalletAddress(session);
+  return Boolean(metadataAddress && address && metadataAddress === address.toLowerCase());
+}
+
 async function currentSessionWalletMatches(
   supabase: SupabaseClient<Database>,
   address: `0x${string}`,
@@ -62,15 +79,7 @@ async function currentSessionWalletMatches(
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (!session) return false;
-
-  const metadataAddress =
-    typeof session.user.app_metadata?.wallet_address === "string"
-      ? session.user.app_metadata.wallet_address
-      : typeof session.user.user_metadata?.wallet_address === "string"
-        ? session.user.user_metadata.wallet_address
-      : undefined;
-  return metadataAddress?.toLowerCase() === address.toLowerCase();
+  return sessionMatchesWallet(session, address);
 }
 
 export async function ensureWalletSession({
