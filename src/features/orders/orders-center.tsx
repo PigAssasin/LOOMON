@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   Check,
   Clock3,
@@ -48,6 +49,7 @@ type PendingAction = {
   item: CommerceItem;
   action: "reject" | "request_changes" | "withdraw" | "cancel";
 };
+type OrderAssetPreview = { url: string; label: string };
 
 const SINGLE_DEMO_SELLER_ADDRESS = "0xd59aa8db407d4219fe4b104ca4142df14301dec4";
 
@@ -98,7 +100,8 @@ export function OrdersCenter() {
   const [needsWalletVerification, setNeedsWalletVerification] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>();
   const [actionBusy, setActionBusy] = useState(false);
-  const [actionStatus, setActionStatus] = useState("");
+  const setActionStatus = useCallback(() => undefined, []);
+  const [orderAssetsById, setOrderAssetsById] = useState<Record<string, OrderAssetPreview>>({});
   const actionBusyRef = useRef(false);
   const [proofsByOrderId, setProofsByOrderId] = useState<Record<string, OrderProofRecord>>({});
   const [claimableMakers, setClaimableMakers] = useState<Array<{ id: number; slug: string; display_name: string }>>([]);
@@ -228,6 +231,32 @@ export function OrdersCenter() {
       void supabase.removeChannel(channel);
     };
   }, [loadWorkspace, supabase]);
+
+  useEffect(() => {
+    const orders = [...workspace.buyingOrders, ...workspace.sellingOrders];
+    const missing = orders.filter((item) => !orderAssetsById[item.id]);
+    if (!missing.length) return;
+    let active = true;
+    void Promise.all(missing.map(async (item) => {
+      const url = `/api/orders/${item.id}/brief-assets${address ? `?address=${encodeURIComponent(address)}` : ""}`;
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const body = await response.json() as {
+        assets?: Array<{ role?: string | null; label?: string | null; url?: string | null }>;
+      };
+      const asset = body.assets?.find((candidate) =>
+        candidate.url && candidate.role === "agent_render",
+      ) ?? body.assets?.find((candidate) => candidate.url);
+      return asset?.url ? [item.id, { url: asset.url, label: asset.label ?? "Order image" }] as const : null;
+    })).then((results) => {
+      if (!active) return;
+      const entries = results.filter(Boolean) as Array<readonly [string, OrderAssetPreview]>;
+      if (entries.length) {
+        setOrderAssetsById((current) => ({ ...current, ...Object.fromEntries(entries) }));
+      }
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [address, orderAssetsById, workspace.buyingOrders, workspace.sellingOrders]);
 
   const buying = useMemo(
     () => [...workspace.buyingRequests, ...workspace.buyingOrders],
@@ -608,8 +637,6 @@ export function OrdersCenter() {
       </header>
 
       {error || sessionError ? <p className="form-error" role="alert">{error || sessionError}</p> : null}
-      {actionStatus ? <p className="form-status" role="status">{actionStatus}</p> : null}
-
       <nav className="orders-mode-switch" aria-label="Order workspace">
         <button className={mode === "buyer" ? "active" : ""} aria-pressed={mode === "buyer"} onClick={() => setMode("buyer")} type="button"><ShoppingBag size={19} /><span><strong>Buying</strong><small>{buying.length} total</small></span></button>
         <button className={mode === "seller" ? "active" : ""} aria-pressed={mode === "seller"} onClick={() => setMode("seller")} type="button"><Store size={19} /><span><strong>Selling</strong><small>{selling.length} total</small></span></button>
@@ -641,6 +668,7 @@ export function OrdersCenter() {
               mode="buyer"
               compact={buyerTab === "history"}
               proofsByOrderId={proofsByOrderId}
+              orderAssetsById={orderAssetsById}
               busy={actionBusy}
             onRequestAction={(item, action) => {
               if (action === "withdraw") setPendingAction({ item, action });
@@ -665,6 +693,7 @@ export function OrdersCenter() {
               mode="seller"
               compact={sellerTab === "history"}
               proofsByOrderId={proofsByOrderId}
+              orderAssetsById={orderAssetsById}
               busy={actionBusy}
               onRequestAction={(item, action) => {
                 if (action === "accept" || action === "reject") void transitionRequestOnchain(item, action);
@@ -711,6 +740,7 @@ function CommerceList({
   mode,
   compact,
   proofsByOrderId,
+  orderAssetsById,
   busy,
   onRequestAction,
   onOrderAction,
@@ -719,6 +749,7 @@ function CommerceList({
   mode: OrderMode;
   compact?: boolean;
   proofsByOrderId: Record<string, OrderProofRecord>;
+  orderAssetsById: Record<string, OrderAssetPreview>;
   busy: boolean;
   onRequestAction: (item: CommerceItem, action: "accept" | "reject" | "request_changes" | "withdraw") => void;
   onOrderAction: (item: CommerceItem, action: "start_production" | "mark_delivered" | "confirm_completion" | "cancel" | "refund") => void;
@@ -731,26 +762,28 @@ function CommerceList({
     <div className="orders-section-title"><h2>{mode === "buyer" ? "Your purchases" : "Your shop"}</h2><span>{items.length}</span></div>
     {compact
       ? <div className="orders-history-list">{items.map((item) => <HistoryRow key={`${item.kind}-${item.id}`} item={item} mode={mode} proof={proofsByOrderId[item.id]} />)}</div>
-      : items.map((item) => <CommerceRow key={`${item.kind}-${item.id}`} item={item} mode={mode} busy={busy} onRequestAction={onRequestAction} onOrderAction={onOrderAction} />)}
+      : items.map((item) => <CommerceRow key={`${item.kind}-${item.id}`} item={item} mode={mode} asset={orderAssetsById[item.id]} busy={busy} onRequestAction={onRequestAction} onOrderAction={onOrderAction} />)}
   </section>;
 }
 
 function CommerceRow({
   item,
   mode,
+  asset,
   busy,
   onRequestAction,
   onOrderAction,
 }: {
   item: CommerceItem;
   mode: OrderMode;
+  asset?: OrderAssetPreview;
   busy: boolean;
   onRequestAction: (item: CommerceItem, action: "accept" | "reject" | "request_changes" | "withdraw") => void;
   onOrderAction: (item: CommerceItem, action: "start_production" | "mark_delivered" | "confirm_completion" | "cancel" | "refund") => void;
 }) {
   const product = getProductBySlug(item.productSlug) ?? products[0];
   return <article className="order-feature-row seller-request-row order-real-row">
-    <ProductVisual product={product} />
+    {asset?.url ? <div className="order-custom-visual"><Image src={asset.url} alt={asset.label} width={520} height={520} unoptimized /></div> : <ProductVisual product={product} />}
     <div className="order-feature-copy">
       <span className="order-stage"><i /> {statusLabel(item.status)}</span>
       <h3>{item.productTitle}</h3>

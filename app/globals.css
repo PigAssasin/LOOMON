@@ -704,6 +704,24 @@ button { color: inherit; }
 .orders-real-list .order-real-row .product-visual {
   min-height: 220px;
   border-radius: 24px 0 0 24px;
+  background-size: 200% 200%;
+}
+
+.orders-real-list .order-real-row .order-custom-visual {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 24px 0 0 24px;
+  background: #fff;
+}
+
+.orders-real-list .order-real-row .order-custom-visual img {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: #fff;
 }
 
 .orders-real-list .order-feature-copy {
@@ -865,6 +883,11 @@ button { color: inherit; }
   }
 
   .orders-real-list .order-real-row .product-visual {
+    min-height: 230px;
+    border-radius: 24px 24px 0 0;
+  }
+
+  .orders-real-list .order-real-row .order-custom-visual {
     min-height: 230px;
     border-radius: 24px 24px 0 0;
   }
