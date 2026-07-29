@@ -1,6 +1,7 @@
 import { parseAbi } from "viem";
 
 export const loomonEscrowPoolAbi = parseAbi([
+  "function getOrder(bytes32 orderId) view returns ((address buyer, address seller, uint256 amountAtomic, bytes32 termsHash, uint8 state, uint64 fundedAt, uint64 completedAt, uint64 sellerClaimableAt))",
   "function placeOrder(bytes32 orderId, address seller, uint256 amountAtomic, bytes32 termsHash) payable",
   "function startProduction(bytes32 orderId)",
   "function markDelivered(bytes32 orderId, bytes32 evidenceHash)",

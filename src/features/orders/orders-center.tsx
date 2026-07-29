@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getAddress, keccak256, toBytes } from "viem";
-import { useWriteContract } from "wagmi";
+import { usePublicClient, useWriteContract } from "wagmi";
 import { SiteHeader } from "@/src/components/site-header";
 import { ProductVisual } from "@/src/components/product-visual";
 import {
@@ -103,11 +103,25 @@ export function OrdersCenter() {
   const [proofsByOrderId, setProofsByOrderId] = useState<Record<string, OrderProofRecord>>({});
   const [claimableMakers, setClaimableMakers] = useState<Array<{ id: number; slug: string; display_name: string }>>([]);
   const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient({ chainId: ARC_TESTNET.id });
 
   const loadSingleDemoSellerWorkspace = useCallback(async () => {
     if (!address || !isSingleDemoSeller(address)) return false;
     const response = await fetch(
       `/api/orders/demo-seller-workspace?address=${encodeURIComponent(address)}`,
+    );
+    if (!response.ok) return false;
+    const data = await response.json();
+    setWorkspace(commerceWorkspaceSchema.parse(data));
+    setClaimableMakers([]);
+    setNeedsWalletVerification(false);
+    return true;
+  }, [address]);
+
+  const loadWalletBuyerWorkspace = useCallback(async () => {
+    if (!address || isSingleDemoSeller(address)) return false;
+    const response = await fetch(
+      `/api/orders/wallet-workspace?address=${encodeURIComponent(address)}`,
     );
     if (!response.ok) return false;
     const data = await response.json();
@@ -131,7 +145,7 @@ export function OrdersCenter() {
 
     const { data: authData } = await supabase.auth.getSession();
     if (!authData.session) {
-      if (!(await loadSingleDemoSellerWorkspace())) {
+      if (!(await loadSingleDemoSellerWorkspace()) && !(await loadWalletBuyerWorkspace())) {
         setWorkspace(emptyCommerceWorkspace);
         setNeedsWalletVerification(false);
       }
@@ -139,7 +153,7 @@ export function OrdersCenter() {
       return;
     }
     if (isConnected && !sessionMatchesWallet(authData.session, address)) {
-      if (!(await loadSingleDemoSellerWorkspace())) {
+      if (!(await loadSingleDemoSellerWorkspace()) && !(await loadWalletBuyerWorkspace())) {
         await supabase.auth.signOut();
         setWorkspace(emptyCommerceWorkspace);
         setNeedsWalletVerification(false);
@@ -167,7 +181,21 @@ export function OrdersCenter() {
     }
     setClaimableMakers(makers ?? []);
     if (!silent) setLoading(false);
-  }, [address, isConnected, loadSingleDemoSellerWorkspace, supabase]);
+  }, [address, isConnected, loadSingleDemoSellerWorkspace, loadWalletBuyerWorkspace, supabase]);
+
+  async function readEscrowState(escrow: EscrowOrderContext) {
+    if (!publicClient) return null;
+    const rawOrder = await publicClient.readContract({
+      address: getAddress(escrow.poolAddress),
+      abi: loomonEscrowPoolAbi,
+      functionName: "getOrder",
+      args: [escrow.onchainOrderId as `0x${string}`],
+    });
+    const stateValue = Array.isArray(rawOrder)
+      ? rawOrder[4]
+      : (rawOrder as { state?: number | bigint }).state;
+    return Number(stateValue);
+  }
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -401,7 +429,14 @@ export function OrdersCenter() {
       let transactionHash: `0x${string}`;
 
       if (action === "mark_delivered") {
-        if (item.status === "escrow_funded") {
+        const chainState = await readEscrowState(escrow);
+        if (chainState === 3) {
+          throw new Error("This order is already delivered on Arc. Refreshing the database view will restore it.");
+        }
+        if (chainState !== null && ![1, 2].includes(chainState)) {
+          throw new Error(`This order is not deliverable on Arc right now. Current onchain state: ${chainState}.`);
+        }
+        if (chainState === 1 || (chainState === null && item.status === "escrow_funded")) {
           setActionStatus("1/2 Confirm production start in your wallet...");
           const startHash = await writeContractAsync({
             address: getAddress(escrow.poolAddress),

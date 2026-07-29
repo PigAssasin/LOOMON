@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getAddress, keccak256, toBytes } from "viem";
-import { useAccount, useWriteContract } from "wagmi";
+import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { SiteHeader } from "@/src/components/site-header";
 import {
   commerceWorkspaceSchema,
@@ -64,6 +64,7 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
   const session = useLoomonSession();
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient({ chainId: ARC_TESTNET.id });
   const [item, setItem] = useState<CommerceItem>();
   const [escrow, setEscrow] = useState<EscrowOrderContext>();
   const [role, setRole] = useState<"buyer" | "seller">("buyer");
@@ -95,6 +96,13 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
       if (response.ok) {
         workspace = commerceWorkspaceSchema.parse(await response.json());
         loadedAsDemoSeller = true;
+      }
+    } else if (address && (!authData.session || !sessionMatchesWallet(authData.session, address))) {
+      const response = await fetch(
+        `/api/orders/wallet-workspace?address=${encodeURIComponent(address)}`,
+      );
+      if (response.ok) {
+        workspace = commerceWorkspaceSchema.parse(await response.json());
       }
     } else {
       const { data, error: workspaceError } = await session.supabase.rpc("get_my_commerce_workspace");
@@ -262,7 +270,26 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
           chainId: ARC_TESTNET.id,
         });
       } else if (action === "mark_delivered") {
-        if (item.status === "escrow_funded") {
+        let chainState: number | null = null;
+        if (publicClient) {
+          const rawOrder = await publicClient.readContract({
+            address: getAddress(escrow.poolAddress),
+            abi: loomonEscrowPoolAbi,
+            functionName: "getOrder",
+            args: [orderId],
+          });
+          const stateValue = Array.isArray(rawOrder)
+            ? rawOrder[4]
+            : (rawOrder as { state?: number | bigint }).state;
+          chainState = Number(stateValue);
+        }
+        if (chainState === 3) {
+          throw new Error("This order is already delivered on Arc. Refresh the page to restore the database view.");
+        }
+        if (chainState !== null && ![1, 2].includes(chainState)) {
+          throw new Error(`This order is not deliverable on Arc right now. Current onchain state: ${chainState}.`);
+        }
+        if (chainState === 1 || (chainState === null && item.status === "escrow_funded")) {
           const startHash = await writeContractAsync({
             address: getAddress(escrow.poolAddress),
             abi: loomonEscrowPoolAbi,
