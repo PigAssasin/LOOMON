@@ -75,7 +75,19 @@ export function buyingStage(item: CommerceItem) {
       ? "history"
       : "requests";
   }
-  return ["proof_minted", "cancelled", "released", "refunded", "resolved"].includes(item.status)
+  return [
+    "seller_accepted",
+    "in_progress",
+    "seller_marked_delivered",
+    "buyer_confirmed_received",
+    "proof_pending",
+    "proof_minted",
+    "release_hold",
+    "cancelled",
+    "released",
+    "refunded",
+    "resolved",
+  ].includes(item.status)
     ? "history"
     : "active";
 }
@@ -86,7 +98,19 @@ export function sellingStage(item: CommerceItem) {
       ? "incoming"
       : "history";
   }
-  return ["proof_minted", "cancelled", "released", "refunded", "resolved"].includes(item.status)
+  return [
+    "seller_accepted",
+    "in_progress",
+    "seller_marked_delivered",
+    "buyer_confirmed_received",
+    "proof_pending",
+    "proof_minted",
+    "release_hold",
+    "cancelled",
+    "released",
+    "refunded",
+    "resolved",
+  ].includes(item.status)
     ? "history"
     : "active";
 }

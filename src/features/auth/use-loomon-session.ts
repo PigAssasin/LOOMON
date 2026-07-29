@@ -70,8 +70,9 @@ export function useLoomonSession() {
     setError("");
     try {
       await supabase?.auth.signOut();
-      await disconnectAsync();
+      await disconnectAsync().catch(() => undefined);
     } finally {
+      setAuthTick((tick) => tick + 1);
       setBusy(false);
     }
   }, [disconnectAsync, supabase]);

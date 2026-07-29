@@ -98,6 +98,7 @@ export function OrdersCenter() {
   const [needsWalletVerification, setNeedsWalletVerification] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>();
   const [actionBusy, setActionBusy] = useState(false);
+  const [actionStatus, setActionStatus] = useState("");
   const actionBusyRef = useRef(false);
   const [proofsByOrderId, setProofsByOrderId] = useState<Record<string, OrderProofRecord>>({});
   const [claimableMakers, setClaimableMakers] = useState<Array<{ id: number; slug: string; display_name: string }>>([]);
@@ -132,7 +133,7 @@ export function OrdersCenter() {
     if (!authData.session) {
       if (!(await loadSingleDemoSellerWorkspace())) {
         setWorkspace(emptyCommerceWorkspace);
-        setNeedsWalletVerification(Boolean(isConnected));
+        setNeedsWalletVerification(false);
       }
       if (!silent) setLoading(false);
       return;
@@ -141,7 +142,7 @@ export function OrdersCenter() {
       if (!(await loadSingleDemoSellerWorkspace())) {
         await supabase.auth.signOut();
         setWorkspace(emptyCommerceWorkspace);
-        setNeedsWalletVerification(true);
+        setNeedsWalletVerification(false);
       }
       if (!silent) setLoading(false);
       return;
@@ -281,6 +282,7 @@ export function OrdersCenter() {
     setActionBusy(true);
     actionBusyRef.current = true;
     setError("");
+    setActionStatus("");
     try {
       const requestIdHash = keccak256(toBytes(item.id));
       const decisionHash = keccak256(toBytes([
@@ -289,6 +291,7 @@ export function OrdersCenter() {
         item.reference,
         action,
       ].join(":")));
+      setActionStatus(action === "accept" ? "Confirm seller accept in your wallet..." : "Confirm seller reject in your wallet...");
       const transactionHash = await writeContractAsync({
         address: LOOMON_QUOTE_DECISION_ADDRESS,
         abi: loomonQuoteDecisionAbi,
@@ -296,6 +299,7 @@ export function OrdersCenter() {
         args: [requestIdHash, quoteDecisionCode[action], decisionHash],
         chainId: ARC_TESTNET.id,
       });
+      setActionStatus("Confirming the seller decision on Arc...");
       const requestKey = crypto.randomUUID();
       const response = await fetch(`/api/quote-requests/${item.id}/decision/confirm`, {
         method: "POST",
@@ -308,6 +312,7 @@ export function OrdersCenter() {
       }
       if (action === "accept") setSellerTab("active");
       if (action === "reject") setSellerTab("history");
+      setActionStatus(action === "accept" ? "Accepted on Arc. Loading active work..." : "Rejected on Arc. Moving to history...");
       setWorkspace((current) => ({
         ...current,
         sellingRequests: current.sellingRequests.filter((request) => request.id !== item.id),
@@ -323,6 +328,7 @@ export function OrdersCenter() {
     } finally {
       actionBusyRef.current = false;
       setActionBusy(false);
+      window.setTimeout(() => setActionStatus(""), 3500);
     }
   }
 
@@ -386,6 +392,7 @@ export function OrdersCenter() {
     setActionBusy(true);
     actionBusyRef.current = true;
     setError("");
+    setActionStatus("");
     try {
       const escrow = await loadEscrowContext(item);
       if (!escrow) throw new Error("This order has no Arc escrow context yet.");
@@ -395,6 +402,7 @@ export function OrdersCenter() {
 
       if (action === "mark_delivered") {
         if (item.status === "escrow_funded") {
+          setActionStatus("1/2 Confirm production start in your wallet...");
           const startHash = await writeContractAsync({
             address: getAddress(escrow.poolAddress),
             abi: loomonEscrowPoolAbi,
@@ -402,6 +410,7 @@ export function OrdersCenter() {
             args: [orderId],
             chainId: ARC_TESTNET.id,
           });
+          setActionStatus("1/2 Confirming production start on Arc...");
           const startResponse = await fetch(`/api/orders/${item.id}/escrow/confirm`, {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -413,6 +422,7 @@ export function OrdersCenter() {
           }
         }
 
+        setActionStatus("2/2 Confirm delivery in your wallet...");
         transactionHash = await writeContractAsync({
           address: getAddress(escrow.poolAddress),
           abi: loomonEscrowPoolAbi,
@@ -421,6 +431,7 @@ export function OrdersCenter() {
           chainId: ARC_TESTNET.id,
         });
       } else if (action === "cancel") {
+        setActionStatus("Confirm refund cancellation in your wallet...");
         transactionHash = await writeContractAsync({
           address: getAddress(escrow.poolAddress),
           abi: loomonEscrowPoolAbi,
@@ -429,6 +440,7 @@ export function OrdersCenter() {
           chainId: ARC_TESTNET.id,
         });
       } else {
+        setActionStatus("Confirm buyer refund in your wallet...");
         transactionHash = await writeContractAsync({
           address: getAddress(escrow.poolAddress),
           abi: loomonEscrowPoolAbi,
@@ -438,6 +450,11 @@ export function OrdersCenter() {
         });
       }
 
+      setActionStatus(
+        action === "mark_delivered"
+          ? "Confirming delivery and minting proof NFTs..."
+          : "Confirming refund on Arc...",
+      );
       const response = await fetch(`/api/orders/${item.id}/escrow/confirm`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -448,7 +465,10 @@ export function OrdersCenter() {
         throw new Error(typeof body?.error === "string" ? body.error : "Escrow action could not be confirmed");
       }
 
-      if (action === "mark_delivered") setSellerTab("active");
+      if (action === "mark_delivered") {
+        setSellerTab("history");
+        setActionStatus("Delivered on Arc. Proof NFTs are being indexed...");
+      }
       if (action === "cancel" || action === "refund") {
         if (mode === "buyer") setBuyerTab("history");
         else setSellerTab("history");
@@ -480,6 +500,7 @@ export function OrdersCenter() {
       }));
       await loadWorkspace({ silent: true });
     } catch (cause) {
+      setActionStatus("");
       const message = cause instanceof Error ? cause.message : "The Arc order action failed.";
       setError(/user rejected|user denied|rejected the request/i.test(message)
         ? "Transaction was cancelled in your wallet."
@@ -489,6 +510,7 @@ export function OrdersCenter() {
     } finally {
       actionBusyRef.current = false;
       setActionBusy(false);
+      window.setTimeout(() => setActionStatus(""), 4500);
     }
   }
 
@@ -516,6 +538,7 @@ export function OrdersCenter() {
       </header>
 
       {error || sessionError ? <p className="form-error" role="alert">{error || sessionError}</p> : null}
+      {actionStatus ? <p className="form-status" role="status">{actionStatus}</p> : null}
 
       <nav className="orders-mode-switch" aria-label="Order workspace">
         <button className={mode === "buyer" ? "active" : ""} aria-pressed={mode === "buyer"} onClick={() => setMode("buyer")} type="button"><ShoppingBag size={19} /><span><strong>Buying</strong><small>{buying.length} total</small></span></button>
@@ -525,9 +548,9 @@ export function OrdersCenter() {
       {needsWalletVerification ? (
         <OrderStageEmpty
           index="01"
-          title="Verify this wallet once."
-          detail="This keeps buyer and seller workspaces separated. LOOMON will not ask again unless you switch wallets."
-          action={<button className="gradient-stroke-button" type="button" onClick={() => void connectAndLoad()} disabled={sessionBusy}>Verify wallet</button>}
+          title="Sync this wallet."
+          detail="Use this only when you want LOOMON to load private orders for the connected wallet."
+          action={<button className="gradient-stroke-button" type="button" onClick={() => void connectAndLoad()} disabled={sessionBusy}>Sync wallet</button>}
         />
       ) : !isAuthenticated && !isConnected ? (
         <OrderStageEmpty
