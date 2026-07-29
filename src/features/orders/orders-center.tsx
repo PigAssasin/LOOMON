@@ -100,7 +100,9 @@ export function OrdersCenter() {
   const [needsWalletVerification, setNeedsWalletVerification] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>();
   const [actionBusy, setActionBusy] = useState(false);
-  const setActionStatus = useCallback(() => undefined, []);
+  const setActionStatus = useCallback((message?: string) => {
+    void message;
+  }, []);
   const [orderAssetsById, setOrderAssetsById] = useState<Record<string, OrderAssetPreview>>({});
   const actionBusyRef = useRef(false);
   const [proofsByOrderId, setProofsByOrderId] = useState<Record<string, OrderProofRecord>>({});
