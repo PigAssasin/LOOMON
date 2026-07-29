@@ -298,6 +298,16 @@ button { color: inherit; }
 .custom-preview-confirm { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 22px; margin-top: 28px; padding: 18px 0; background: rgba(14,16,15,.96); border-top: var(--hairline); }.custom-preview-confirm > span { color: var(--color-surface-50); font-size: 13px; }.custom-preview-confirm .gradient-stroke-button:disabled { opacity: .35; cursor: not-allowed; transform: none; }
 .custom-preview-submitted { margin-top: 3vh; }.custom-preview-submitted > img { width: min(520px, 100%); height: auto; aspect-ratio: 1; display: block; margin: 28px 0; object-fit: cover; border-radius: 8px; background: #fff; }.custom-preview-submitted > p strong { color: var(--color-surface-cream); }.custom-preview-submitted .gradient-stroke-button { margin-top: 24px; }
 
+.custom-selected-preview--hero { position: sticky; top: 118px; display: grid; overflow: hidden; border: 1px solid var(--color-surface-25); border-radius: 14px; background: #fff; }
+.custom-selected-preview--hero img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #fff; }
+.custom-selected-preview--hero span { color: var(--color-just-black); background: var(--color-surface-cream); border-top: 1px solid rgba(14,16,15,.12); }
+.custom-render-grid--inline { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px; }
+.custom-render-grid--inline button { display: grid; gap: 10px; min-width: 0; }
+.custom-render-grid--inline img { width: 100%; aspect-ratio: 1; object-fit: contain; border: 1px solid rgba(14,16,15,.12); border-radius: 10px; background: #fff; box-shadow: none; }
+.custom-render-grid--inline button.active img { outline: 2px solid var(--color-light-green); outline-offset: 3px; }
+.custom-render-grid--inline span { min-height: 34px; align-items: flex-start; color: var(--color-surface-50); line-height: 1.1; }
+.custom-render-grid--inline button.active span { color: var(--color-light-green); }
+
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }

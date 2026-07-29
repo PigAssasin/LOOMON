@@ -8,12 +8,13 @@ import {
 import type { CustomizationSession } from "@/src/features/customization/customization-storage";
 
 const approvedBrief: CustomizationSession = {
-  schemaVersion: 6,
+  schemaVersion: 7,
   productSlug: "celadon-tea-cups",
   mode: "choose",
   intent: "text_only",
   status: "ready",
   printText: "",
+  artworkDescription: "",
   notes: "Write LOOMON near the base.",
   quantity: 20,
   requiredBy: "",

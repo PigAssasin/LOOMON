@@ -66,7 +66,8 @@ export function ProductCustomizationStudio({
 
   const render = useCallback(async (current: CustomizationSession) => {
     const textToPrint = current.printText.trim();
-    if (!current.file && !textToPrint) return;
+    const artworkDescription = current.artworkDescription.trim();
+    if (!current.file && !textToPrint && !artworkDescription) return;
     const rendering = {
       ...current,
       mode: "choose" as const,
@@ -87,12 +88,13 @@ export function ProductCustomizationStudio({
       body.append("intent", current.file ? "apply_artwork" : "text_only");
       body.append("productName", product.title);
       body.append("printText", textToPrint);
+      body.append("artworkDescription", artworkDescription);
       body.append("notes", current.notes);
       body.append("renderId", rendering.renderId ?? "");
       const response = await fetch("/api/agent/render", { method: "POST", body });
       if (!response.ok) throw new Error("Render request failed");
       const result = await response.json() as { demo: boolean; images: CustomizationSession["previews"] };
-      persist({ ...rendering, status: "ready", previews: result.images, renderDemo: result.demo, updatedAt: Date.now() });
+      persist({ ...rendering, status: "ready", previews: result.images, selectedPreview: result.images[1]?.label ?? result.images[0]?.label, renderDemo: result.demo, updatedAt: Date.now() });
     } catch {
       persist({ ...rendering, status: "error", updatedAt: Date.now() });
     }
@@ -165,8 +167,21 @@ export function ProductCustomizationStudio({
     });
   }
 
-  const selectedPreview = session.previews.find((preview) => preview.label === session.selectedPreview);
-  const hasRenderInput = Boolean(session.file || session.printText.trim());
+  function updateArtworkDescription(value: string) {
+    persist({
+      ...session,
+      artworkDescription: value,
+      previews: [],
+      selectedPreview: undefined,
+      renderId: undefined,
+      renderStartedAt: undefined,
+      status: "idle",
+      updatedAt: Date.now(),
+    });
+  }
+
+  const selectedPreview = session.previews.find((preview) => preview.label === session.selectedPreview) ?? session.previews[1] ?? session.previews[0];
+  const hasRenderInput = Boolean(session.file || session.printText.trim() || session.artworkDescription.trim());
   const renderDisabled = !hasRenderInput || order.isBusy || session.status === "rendering";
 
   return <div className="custom-studio-layer" role="dialog" aria-modal="true" aria-label={`Customize ${product.title}`}>
@@ -194,8 +209,7 @@ export function ProductCustomizationStudio({
           </div>
         </section> : <section className="custom-order-sheet">
           <div className="custom-order-reference">
-            <div className="custom-product-reference"><ProductVisual product={product} /><span>Product reference - shape must stay unchanged</span></div>
-            {selectedPreview ? <div className="custom-selected-preview"><Image src={selectedPreview.url} alt="Selected AI preview" width={520} height={520} unoptimized /><span><Check size={15} /> Selected AI preview</span></div> : null}
+            {selectedPreview ? <div className="custom-selected-preview custom-selected-preview--hero"><Image src={selectedPreview.url} alt="Selected AI preview" width={720} height={720} unoptimized /><span><Check size={15} /> Selected AI preview</span></div> : <div className="custom-product-reference"><ProductVisual product={product} /><span>Product reference - shape must stay unchanged</span></div>}
           </div>
 
           <div className="custom-order-form">
@@ -218,6 +232,16 @@ export function ProductCustomizationStudio({
                 />
               </label>
 
+              <label className="custom-prompt-field">
+                <span>Describe the artwork or placement <small>Optional</small></span>
+                <textarea
+                  rows={3}
+                  value={session.artworkDescription}
+                  onChange={(event) => updateArtworkDescription(event.target.value)}
+                  placeholder="Example: place a tiny red lotus mark near the lower right edge, calm souvenir style."
+                />
+              </label>
+
               <div className="custom-ai-render-card">
                 <div><ImagePlus size={19} /><span><strong>AI preview</strong><small>Optional · 3 images · testnet preview</small></span></div>
                 <button className="ghost-button" type="button" disabled={renderDisabled} onClick={() => void render(session)}>
@@ -228,7 +252,7 @@ export function ProductCustomizationStudio({
 
               {session.status === "error" ? <p className="custom-render-error">AI preview could not finish. Your order details are still saved.</p> : null}
               {session.status === "rendering" ? <div className="custom-render-loading"><i /><i /><i /></div> : null}
-              {session.previews.length ? <div className="custom-render-grid custom-render-grid--inline">{session.previews.map((preview) => <button className={session.selectedPreview === preview.label ? "active" : ""} type="button" key={preview.label} onClick={() => persist({ ...session, selectedPreview: preview.label, updatedAt: Date.now() })}><Image src={preview.url} alt={preview.label} width={440} height={440} unoptimized /><span><Check size={15} /> {session.selectedPreview === preview.label ? "Selected" : preview.label}</span></button>)}</div> : null}
+              {session.previews.length ? <div className="custom-render-grid custom-render-grid--inline">{session.previews.map((preview) => <button className={(session.selectedPreview ?? selectedPreview?.label) === preview.label ? "active" : ""} type="button" key={preview.label} onClick={() => persist({ ...session, selectedPreview: preview.label, updatedAt: Date.now() })}><Image src={preview.url} alt={preview.label} width={440} height={440} unoptimized /><span><Check size={15} /> {preview.label}</span></button>)}</div> : null}
 
               <label className="custom-prompt-field">
                 <span>Note for the seller <small>Optional</small></span>

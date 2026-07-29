@@ -8,7 +8,7 @@ import {
 describe("customization order draft", () => {
   it("starts at one piece and optional date empty", () => {
     const draft = createEmptyCustomizationSession("celadon-tea-cups");
-    expect(draft.schemaVersion).toBe(6);
+    expect(draft.schemaVersion).toBe(7);
     expect(draft.quantity).toBe(1);
     expect(draft.requiredBy).toBe("");
     expect(draft.printText).toBe("");
@@ -30,7 +30,7 @@ describe("customization order draft", () => {
     } as unknown as CustomizationSession;
 
     const upgraded = normalizeCustomizationSession("celadon-tea-cups", 20, legacy);
-    expect(upgraded.schemaVersion).toBe(6);
+    expect(upgraded.schemaVersion).toBe(7);
     expect(upgraded.mode).toBe("choose");
     expect(upgraded.selectedPreview).toBe("Preview 1");
     expect(upgraded.quantity).toBe(1);

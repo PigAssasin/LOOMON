@@ -83,6 +83,7 @@ function submissionIntent(session: CustomizationSession) {
 function submissionNotes(session: CustomizationSession) {
   const parts = [
     session.printText.trim() ? `Text to print: ${session.printText.trim()}` : "",
+    session.artworkDescription.trim() ? `Artwork description: ${session.artworkDescription.trim()}` : "",
     session.notes.trim() ? `Seller notes: ${session.notes.trim()}` : "",
   ].filter(Boolean);
   return parts.join("\n\n") || "No customization requested. Standard product order.";
