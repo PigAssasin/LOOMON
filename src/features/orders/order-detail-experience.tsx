@@ -77,9 +77,9 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
   const [copied, setCopied] = useState(false);
   const [pageOpenedAt] = useState(Date.now);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!session.supabase) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
 
     const { data: authData } = await session.supabase.auth.getSession();
     let workspace = emptyCommerceWorkspace;
@@ -108,7 +108,7 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
       const { data, error: workspaceError } = await session.supabase.rpc("get_my_commerce_workspace");
       if (workspaceError) {
         setError("This order could not be loaded.");
-        setLoading(false);
+        if (!silent) setLoading(false);
         return;
       }
       workspace = commerceWorkspaceSchema.parse(data ?? emptyCommerceWorkspace);
@@ -147,7 +147,7 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
       });
       setMessages(Array.isArray(threadData) ? threadData as ThreadMessage[] : []);
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, [address, reference, session.supabase]);
 
   useEffect(() => {
@@ -162,13 +162,13 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
     const channel = session.supabase
       .channel(`loomon-order-${item.id}`)
       .on("postgres_changes", { event: "*", schema: "commerce", table: "orders", filter: `id=eq.${item.id}` }, () => {
-        void load();
+        void load({ silent: true });
       })
       .on("postgres_changes", { event: "INSERT", schema: "messaging", table: "messages", filter: `thread_id=eq.${item.threadId}` }, () => {
-        void load();
+        void load({ silent: true });
       })
       .on("postgres_changes", { event: "*", schema: "commerce", table: "order_proof_nfts", filter: `order_id=eq.${item.id}` }, () => {
-        void load();
+        void load({ silent: true });
       })
       .subscribe();
     return () => {

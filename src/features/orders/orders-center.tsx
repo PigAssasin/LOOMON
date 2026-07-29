@@ -172,7 +172,10 @@ export function OrdersCenter() {
     } else {
       setWorkspace(commerceWorkspaceSchema.parse(data));
     }
-    const proofResponse = await fetch("/api/purchases/proofs");
+    const proofUrl = address
+      ? `/api/purchases/proofs?address=${encodeURIComponent(address)}`
+      : "/api/purchases/proofs";
+    const proofResponse = await fetch(proofUrl);
     if (proofResponse.ok) {
       const proofData = await proofResponse.json() as { proofs: Array<OrderProofRecord & { orderNumber?: string }> };
       setProofsByOrderId(Object.fromEntries(proofData.proofs.map((proof) => [proof.orderId, proof])));
@@ -210,15 +213,15 @@ export function OrdersCenter() {
       .channel("loomon-commerce-workspace")
       .on("postgres_changes", { event: "*", schema: "commerce", table: "quote_requests" }, () => {
         if (actionBusyRef.current) return;
-        void loadWorkspace();
+        void loadWorkspace({ silent: true });
       })
       .on("postgres_changes", { event: "*", schema: "commerce", table: "orders" }, () => {
         if (actionBusyRef.current) return;
-        void loadWorkspace();
+        void loadWorkspace({ silent: true });
       })
       .on("postgres_changes", { event: "*", schema: "commerce", table: "order_proof_nfts" }, () => {
         if (actionBusyRef.current) return;
-        void loadWorkspace();
+        void loadWorkspace({ silent: true });
       })
       .subscribe();
     return () => {
@@ -780,7 +783,13 @@ function CommerceRow({
 
 function HistoryRow({ item, mode, proof }: { item: CommerceItem; mode: OrderMode; proof?: OrderProofRecord }) {
   const explorerUrl = buildOrderProofExplorerUrl(proof?.mintTransactionHash ?? item.proofTransactionHash ?? null);
-  const success = ["proof_minted", "released", "seller_marked_delivered", "release_hold"].includes(item.status);
+  const success = ["proof_minted", "released", "release_hold"].includes(item.status);
+  const proofLabel =
+    item.status === "seller_marked_delivered"
+      ? "Waiting for buyer mint"
+      : ["buyer_confirmed_received", "proof_pending"].includes(item.status)
+        ? "Indexing NFT tx"
+        : "No NFT";
   return <article className="orders-history-row">
     <span className={success ? "orders-history-dot orders-history-dot--success" : "orders-history-dot"} />
     <div>
@@ -789,7 +798,7 @@ function HistoryRow({ item, mode, proof }: { item: CommerceItem; mode: OrderMode
     </div>
     <p>{item.productTitle}</p>
     <small>{mode === "buyer" ? item.makerName : item.buyerName ?? "Buyer"} · Qty {item.quantity}</small>
-    {explorerUrl ? <a href={explorerUrl} target="_blank" rel="noreferrer">NFT #{proof?.tokenId ?? item.proofTokenId ?? "tx"} <ExternalLink size={13} /></a> : <em>{success ? "Proof pending" : "No proof"}</em>}
+    {explorerUrl ? <a href={explorerUrl} target="_blank" rel="noreferrer">NFT tx {proof?.tokenId || item.proofTokenId ? `#${proof?.tokenId ?? item.proofTokenId}` : ""} <ExternalLink size={13} /></a> : <em>{success ? "Indexing NFT tx" : proofLabel}</em>}
   </article>;
 }
 
