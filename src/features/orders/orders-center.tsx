@@ -402,6 +402,12 @@ export function OrdersCenter() {
       if (!response.ok) return null;
       return escrowOrderContextSchema.parse(await response.json());
     }
+    if (address) {
+      const response = await fetch(
+        `/api/orders/wallet-escrow?address=${encodeURIComponent(address)}&orderId=${encodeURIComponent(item.id)}`,
+      );
+      if (response.ok) return escrowOrderContextSchema.parse(await response.json());
+    }
     const { data, error: escrowError } = await supabase.rpc("get_order_escrow_context", {
       p_order_id: item.id,
     });
@@ -411,7 +417,7 @@ export function OrdersCenter() {
 
   async function transitionEscrowOrder(
     item: CommerceItem,
-    action: Extract<EscrowAction, "mark_delivered" | "cancel" | "refund">,
+    action: Extract<EscrowAction, "start_production" | "mark_delivered" | "confirm_completion" | "cancel" | "refund">,
   ) {
     if (!address) {
       setError("Connect your Arc wallet before signing this order action.");
@@ -428,40 +434,46 @@ export function OrdersCenter() {
       const reasonHash = keccak256(toBytes(`${action}:${item.id}:${item.reference}`));
       let transactionHash: `0x${string}`;
 
-      if (action === "mark_delivered") {
+      if (action === "start_production") {
+        const chainState = await readEscrowState(escrow);
+        if (chainState === 2) {
+          setActionStatus("Seller already accepted on Arc. Syncing LOOMON...");
+          await loadWorkspace({ silent: true });
+          return;
+        }
+        if (chainState !== null && chainState !== 1) {
+          throw new Error(`This order cannot be accepted on Arc right now. Current onchain state: ${chainState}.`);
+        }
+        setActionStatus("Confirm seller accept in your wallet...");
+        transactionHash = await writeContractAsync({
+          address: getAddress(escrow.poolAddress),
+          abi: loomonEscrowPoolAbi,
+          functionName: "startProduction",
+          args: [orderId],
+          chainId: ARC_TESTNET.id,
+        });
+      } else if (action === "mark_delivered") {
         const chainState = await readEscrowState(escrow);
         if (chainState === 3) {
           throw new Error("This order is already delivered on Arc. Refreshing the database view will restore it.");
         }
-        if (chainState !== null && ![1, 2].includes(chainState)) {
+        if (chainState !== null && chainState !== 2) {
           throw new Error(`This order is not deliverable on Arc right now. Current onchain state: ${chainState}.`);
         }
-        if (chainState === 1 || (chainState === null && item.status === "escrow_funded")) {
-          setActionStatus("1/2 Confirm production start in your wallet...");
-          const startHash = await writeContractAsync({
-            address: getAddress(escrow.poolAddress),
-            abi: loomonEscrowPoolAbi,
-            functionName: "startProduction",
-            args: [orderId],
-            chainId: ARC_TESTNET.id,
-          });
-          setActionStatus("1/2 Confirming production start on Arc...");
-          const startResponse = await fetch(`/api/orders/${item.id}/escrow/confirm`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ action: "start_production", transactionHash: startHash }),
-          });
-          const startBody = await startResponse.json().catch(() => null);
-          if (!startResponse.ok) {
-            throw new Error(typeof startBody?.error === "string" ? startBody.error : "Production start could not be confirmed");
-          }
-        }
-
-        setActionStatus("2/2 Confirm delivery in your wallet...");
+        setActionStatus("Confirm delivered in your wallet...");
         transactionHash = await writeContractAsync({
           address: getAddress(escrow.poolAddress),
           abi: loomonEscrowPoolAbi,
           functionName: "markDelivered",
+          args: [orderId, reasonHash],
+          chainId: ARC_TESTNET.id,
+        });
+      } else if (action === "confirm_completion") {
+        setActionStatus("Confirm received and mint your proof NFT...");
+        transactionHash = await writeContractAsync({
+          address: getAddress(escrow.poolAddress),
+          abi: loomonEscrowPoolAbi,
+          functionName: "confirmCompletion",
           args: [orderId, reasonHash],
           chainId: ARC_TESTNET.id,
         });
@@ -487,8 +499,12 @@ export function OrdersCenter() {
 
       setActionStatus(
         action === "mark_delivered"
-          ? "Confirming delivery and minting proof NFTs..."
-          : "Confirming refund on Arc...",
+          ? "Confirming delivery on Arc..."
+          : action === "confirm_completion"
+            ? "Minting proof NFT and moving this order to history..."
+            : action === "start_production"
+              ? "Seller accepted. Moving order to active..."
+              : "Confirming refund on Arc...",
       );
       const response = await fetch(`/api/orders/${item.id}/escrow/confirm`, {
         method: "POST",
@@ -502,7 +518,15 @@ export function OrdersCenter() {
 
       if (action === "mark_delivered") {
         setSellerTab("history");
-        setActionStatus("Delivered on Arc. Proof NFTs are being indexed...");
+        setActionStatus("Delivered on Arc. Waiting for buyer to mint the proof NFT.");
+      }
+      if (action === "start_production") {
+        setSellerTab("active");
+        setActionStatus("Accepted on Arc. Order is now active.");
+      }
+      if (action === "confirm_completion") {
+        setBuyerTab("history");
+        setActionStatus("Proof NFT minted. Order moved to history.");
       }
       if (action === "cancel" || action === "refund") {
         if (mode === "buyer") setBuyerTab("history");
@@ -517,6 +541,10 @@ export function OrdersCenter() {
                 status:
                   action === "mark_delivered"
                     ? "seller_marked_delivered"
+                    : action === "start_production"
+                      ? "in_production"
+                      : action === "confirm_completion"
+                        ? "proof_minted"
                     : "refunded",
               }
             : order,
@@ -528,6 +556,10 @@ export function OrdersCenter() {
                 status:
                   action === "mark_delivered"
                     ? "seller_marked_delivered"
+                    : action === "start_production"
+                      ? "in_production"
+                      : action === "confirm_completion"
+                        ? "proof_minted"
                     : "refunded",
               }
             : order,
@@ -611,8 +643,7 @@ export function OrdersCenter() {
               if (action === "withdraw") setPendingAction({ item, action });
             }}
             onOrderAction={(item, action) => {
-              if (action === "confirm_received") void transitionOrder(item, action);
-              else if (action === "cancel") void transitionEscrowOrder(item, "cancel");
+              if (action === "cancel" || action === "confirm_completion") void transitionEscrowOrder(item, action);
             }}
           />
         </>
@@ -637,7 +668,7 @@ export function OrdersCenter() {
                 else setPendingAction({ item, action });
               }}
               onOrderAction={(item, action) => {
-                if (action === "mark_delivered" || action === "refund") {
+                if (action === "start_production" || action === "mark_delivered" || action === "refund") {
                   void transitionEscrowOrder(item, action);
                 }
               }}
@@ -687,7 +718,7 @@ function CommerceList({
   proofsByOrderId: Record<string, OrderProofRecord>;
   busy: boolean;
   onRequestAction: (item: CommerceItem, action: "accept" | "reject" | "request_changes" | "withdraw") => void;
-  onOrderAction: (item: CommerceItem, action: "mark_delivered" | "confirm_received" | "cancel" | "refund") => void;
+  onOrderAction: (item: CommerceItem, action: "start_production" | "mark_delivered" | "confirm_completion" | "cancel" | "refund") => void;
 }) {
   if (!items.length) {
     return <OrderStageEmpty index="—" title="Nothing here yet." detail={mode === "buyer" ? "Your next buyer action will appear here." : "New seller activity will appear here."} />;
@@ -712,7 +743,7 @@ function CommerceRow({
   mode: OrderMode;
   busy: boolean;
   onRequestAction: (item: CommerceItem, action: "accept" | "reject" | "request_changes" | "withdraw") => void;
-  onOrderAction: (item: CommerceItem, action: "mark_delivered" | "confirm_received" | "cancel" | "refund") => void;
+  onOrderAction: (item: CommerceItem, action: "start_production" | "mark_delivered" | "confirm_completion" | "cancel" | "refund") => void;
 }) {
   const product = getProductBySlug(item.productSlug) ?? products[0];
   return <article className="order-feature-row seller-request-row order-real-row">
@@ -720,7 +751,7 @@ function CommerceRow({
     <div className="order-feature-copy">
       <span className="order-stage"><i /> {statusLabel(item.status)}</span>
       <h3>{item.productTitle}</h3>
-      <p>{mode === "buyer" ? item.makerName : `${item.buyerName ?? "Buyer"} · Buyer`}</p>
+      <p>{mode === "buyer" ? item.makerName : item.buyerName ?? "Buyer"}</p>
       <dl>
         <div><dt>{item.kind === "order" ? "Order" : "Request"}</dt><dd>{item.reference}</dd></div>
         <div><dt>Quantity</dt><dd>{item.quantity}</dd></div>
@@ -734,9 +765,13 @@ function CommerceRow({
         <button type="button" onClick={() => onRequestAction(item, "request_changes")} disabled={busy}>Request changes</button>
         <button type="button" onClick={() => onRequestAction(item, "reject")} disabled={busy}>Reject</button>
       </> : null}
-      {item.kind === "order" && mode === "seller" && ["escrow_funded", "in_production"].includes(item.status) ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "mark_delivered")} disabled={busy}><PackageCheck size={16} /> Mark delivered</button> : null}
-      {item.kind === "order" && mode === "seller" && ["escrow_funded", "in_production"].includes(item.status) ? <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={busy}>Refund buyer</button> : null}
-      {item.kind === "order" && mode === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "confirm_received")} disabled={busy}><Check size={16} /> Confirm received</button> : null}
+      {item.kind === "order" && mode === "seller" && item.status === "escrow_funded" ? <>
+        <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "start_production")} disabled={busy}>Accept</button>
+        <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={busy}>Reject + refund</button>
+      </> : null}
+      {item.kind === "order" && mode === "seller" && item.status === "in_production" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "mark_delivered")} disabled={busy}><PackageCheck size={16} /> Mark delivered</button> : null}
+      {item.kind === "order" && mode === "seller" && item.status === "in_production" ? <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={busy}>Cancel/refund</button> : null}
+      {item.kind === "order" && mode === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "confirm_completion")} disabled={busy}><Check size={16} /> Mint NFT</button> : null}
       {item.kind === "order" && mode === "buyer" && item.status === "escrow_funded" ? <button type="button" onClick={() => onOrderAction(item, "cancel")} disabled={busy}>Cancel + refund</button> : null}
       {item.kind === "order" && ["seller_accepted", "in_progress"].includes(item.status) ? <span className="orders-wallet-pill">Legacy · no escrow</span> : null}
     </div>

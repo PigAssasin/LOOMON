@@ -28,8 +28,6 @@ const eventByAction: Record<EscrowAction, string> = {
   dispute: "DisputeRaised",
 };
 
-const SINGLE_DEMO_SELLER_ADDRESS = "0xd59aa8db407d4219fe4b104ca4142df14301dec4";
-
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -69,18 +67,18 @@ export async function POST(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const sellerDemoAction = [
-    "start_production",
-    "mark_delivered",
-    "claim",
-    "refund",
-  ].includes(input.data.action);
+  const expectedRole =
+    input.data.action === "confirm_completion" || input.data.action === "cancel"
+      ? "buyer"
+      : input.data.action === "dispute"
+        ? null
+        : "seller";
   const { data: rawContext, error: contextError } = user
     ? await supabase.rpc("get_order_escrow_context", { p_order_id: orderId })
-    : sellerDemoAction
-      ? await createAdminClient().rpc("get_single_demo_seller_escrow_context" as never, {
+    : expectedRole
+      ? await createAdminClient().rpc("get_order_escrow_context_for_projection" as never, {
         p_order_id: orderId,
-        p_wallet_address: SINGLE_DEMO_SELLER_ADDRESS,
+        p_role: expectedRole,
       } as never)
       : { data: null, error: { message: "Sign-in required" } };
   if (contextError || !rawContext) {
@@ -91,13 +89,8 @@ export async function POST(
   }
   const order = escrowOrderContextSchema.parse(rawContext);
 
-  const expectedRole =
-    input.data.action === "confirm_completion" || input.data.action === "cancel"
-      ? "buyer"
-      : input.data.action === "dispute"
-        ? order.role
-        : "seller";
-  if (order.role !== expectedRole) {
+  const resolvedExpectedRole = expectedRole ?? order.role;
+  if (order.role !== resolvedExpectedRole) {
     return NextResponse.json({ error: "This wallet cannot perform that action" }, { status: 403 });
   }
 
@@ -111,7 +104,7 @@ export async function POST(
       input.data.transactionHash as `0x${string}`,
     );
     const expectedActor =
-      expectedRole === "buyer" ? order.buyerAddress : order.sellerAddress;
+      resolvedExpectedRole === "buyer" ? order.buyerAddress : order.sellerAddress;
     if (
       receipt.status !== "success"
       || getAddress(receipt.from) !== getAddress(expectedActor)
@@ -160,7 +153,7 @@ export async function POST(
     if (projectionError) throw projectionError;
 
     let proofs: unknown = null;
-    if (input.data.action === "mark_delivered") {
+    if (input.data.action === "confirm_completion") {
       try {
         proofs = await mintOrderProofsForParticipants({
           orderId: order.orderId,

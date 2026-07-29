@@ -51,10 +51,10 @@ export function statusLabel(status: string) {
     rejected: "Rejected",
     withdrawn: "Withdrawn",
     seller_accepted: "Order accepted",
-    escrow_funded: "Funded in Arc escrow",
+    escrow_funded: "Paid · waiting for seller",
     in_progress: "In progress",
-    in_production: "In production",
-    seller_marked_delivered: "Confirm delivery",
+    in_production: "Seller accepted",
+    seller_marked_delivered: "Delivered · mint proof",
     release_hold: "Completed · 7-day protection",
     released: "Seller paid",
     refunded: "Refunded",
@@ -75,10 +75,11 @@ export function buyingStage(item: CommerceItem) {
       ? "history"
       : "requests";
   }
+  if (item.status === "escrow_funded") return "requests";
+  if (["in_production", "seller_marked_delivered"].includes(item.status)) return "active";
   return [
     "seller_accepted",
     "in_progress",
-    "seller_marked_delivered",
     "buyer_confirmed_received",
     "proof_pending",
     "proof_minted",
@@ -98,6 +99,8 @@ export function sellingStage(item: CommerceItem) {
       ? "incoming"
       : "history";
   }
+  if (item.status === "escrow_funded") return "incoming";
+  if (item.status === "in_production") return "active";
   return [
     "seller_accepted",
     "in_progress",
