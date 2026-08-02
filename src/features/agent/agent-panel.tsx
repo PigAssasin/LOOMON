@@ -1,10 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { History, MessageSquarePlus, PackageCheck, Send, ShieldCheck, Sparkles, X } from "lucide-react";
+import { History, MessageSquarePlus, PackageCheck, Send, ShieldCheck, SmilePlus, Sparkles, UploadCloud, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Product } from "@/src/domain/product";
 import type { AgentPageContext } from "@/src/features/agent/agent-provider";
+import { useLoomonSession } from "@/src/features/auth/use-loomon-session";
 import { products } from "@/src/data/products";
 import { formatMoney } from "@/src/lib/money";
 import { recommendProducts } from "@/src/lib/recommend-products";
@@ -21,6 +23,20 @@ type ChatMessage = {
 };
 type ChatThread = { id: string; title: string; createdAt: number; updatedAt: number; messages: ChatMessage[] };
 type AgentReply = Omit<ChatMessage, "id" | "role"> & { conversationId?: string };
+type OrderChatRequest = {
+  orderId: string;
+  orderReference: string;
+  productTitle: string;
+  counterpartyName: string;
+};
+type OrderChatEntry = {
+  id: string;
+  senderType: string;
+  body: string | null;
+  kind: string;
+  createdAt: string;
+  attachments?: Array<{ id: string; label: string | null; type: string; url: string | null }>;
+};
 
 const THREADS_KEY = "loomon-agent-threads-v2";
 const ACTIVE_THREAD_KEY = "loomon-agent-active-thread-v2";
@@ -124,6 +140,7 @@ export function AgentPanel({
   initialProduct,
   initialGoal,
   contextLabel,
+  orderChat,
   requestId,
   pageContext,
 }: {
@@ -132,15 +149,25 @@ export function AgentPanel({
   initialProduct?: Product;
   initialGoal?: string;
   contextLabel?: string;
+  orderChat?: OrderChatRequest;
   requestId?: number;
   pageContext: AgentPageContext;
 }) {
+  const { address } = useLoomonSession();
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [activeId, setActiveId] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [typing, setTyping] = useState(false);
+  const [activeOrderChat, setActiveOrderChat] = useState<OrderChatRequest>();
+  const [orderChatRole, setOrderChatRole] = useState<string>();
+  const [orderMessages, setOrderMessages] = useState<OrderChatEntry[]>([]);
+  const [orderMessageInput, setOrderMessageInput] = useState("");
+  const [orderMessageImage, setOrderMessageImage] = useState<File>();
+  const [orderChatLoading, setOrderChatLoading] = useState(false);
+  const [orderChatError, setOrderChatError] = useState("");
+  const [orderUnreadCount, setOrderUnreadCount] = useState(0);
   const processedRequest = useRef<number | undefined>(undefined);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const effectiveContext = useMemo<AgentPageContext>(() => ({
@@ -189,11 +216,18 @@ export function AgentPanel({
   useEffect(() => {
     if (!hydrated || !requestId || processedRequest.current === requestId) return;
     processedRequest.current = requestId;
+    if (orderChat) {
+      queueMicrotask(() => {
+        setActiveOrderChat(orderChat);
+        setHistoryOpen(false);
+      });
+      return;
+    }
     const prompt = initialGoal ?? (initialProduct ? `Help me understand ${initialProduct.title} before I customize it.` : "");
     if (prompt) void sendMessage(prompt);
     // sendMessage intentionally uses the newest route context for contextual entry points.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, requestId]);
+  }, [hydrated, requestId, orderChat]);
 
   useEffect(() => {
     if (open) chatEndRef.current?.scrollIntoView({ block: "end" });
@@ -246,8 +280,70 @@ export function AgentPanel({
     const next = createThread(effectiveContext);
     setThreads((current) => [next, ...current]);
     setActiveId(next.id);
+    setActiveOrderChat(undefined);
     setHistoryOpen(false);
     setChatInput("");
+  }
+
+  async function loadOrderChat(chat = activeOrderChat) {
+    if (!chat || !address) return;
+    setOrderChatLoading(true);
+    setOrderChatError("");
+    try {
+      const response = await fetch(`/api/orders/${chat.orderId}/messages?address=${encodeURIComponent(address)}`);
+      const payload = await response.json() as { role?: string; messages?: OrderChatEntry[]; error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Order chat could not be loaded.");
+      const messages = payload.messages ?? [];
+      setOrderChatRole(payload.role);
+      setOrderMessages(messages);
+      const readKey = `loomon-order-chat-read-${chat.orderId}-${address.toLowerCase()}`;
+      const lastRead = Number(localStorage.getItem(readKey) ?? 0);
+      setOrderUnreadCount(messages.filter((message) =>
+        message.senderType !== payload.role && new Date(message.createdAt).getTime() > lastRead,
+      ).length);
+      const newest = messages.at(-1);
+      if (newest) localStorage.setItem(readKey, String(new Date(newest.createdAt).getTime()));
+    } catch (cause) {
+      setOrderChatError(cause instanceof Error ? cause.message : "Order chat could not be loaded.");
+    } finally {
+      setOrderChatLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!open || !activeOrderChat) return;
+    const initial = window.setTimeout(() => void loadOrderChat(activeOrderChat), 0);
+    const interval = window.setInterval(() => void loadOrderChat(activeOrderChat), 12_000);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOrderChat?.orderId, address, open]);
+
+  async function sendOrderMessage() {
+    if (!activeOrderChat || !address || (!orderMessageInput.trim() && !orderMessageImage)) return;
+    setOrderChatLoading(true);
+    setOrderChatError("");
+    try {
+      const form = new FormData();
+      form.set("address", address);
+      form.set("body", orderMessageInput.trim());
+      if (orderMessageImage) form.set("image", orderMessageImage);
+      const response = await fetch(`/api/orders/${activeOrderChat.orderId}/messages`, {
+        method: "POST",
+        body: form,
+      });
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) throw new Error(payload?.error ?? "Message could not be sent.");
+      setOrderMessageInput("");
+      setOrderMessageImage(undefined);
+      await loadOrderChat(activeOrderChat);
+    } catch (cause) {
+      setOrderChatError(cause instanceof Error ? cause.message : "Message could not be sent.");
+    } finally {
+      setOrderChatLoading(false);
+    }
   }
 
   if (!open || !activeThread) return null;
@@ -260,12 +356,12 @@ export function AgentPanel({
           <div className="agent-title">
             <span className="agent-spark"><Sparkles size={17} /></span>
             <div>
-              <strong>LOOMON Agent</strong>
-              <small>Products · orders · wallet · profile</small>
+              <strong>{activeOrderChat ? "Order conversation" : "LOOMON Agent"}</strong>
+              <small>{activeOrderChat ? `${activeOrderChat.orderReference} · ${activeOrderChat.counterpartyName}` : "Products · orders · wallet · profile"}</small>
             </div>
           </div>
           <div className="agent-header-actions">
-            <button className="icon-button" onClick={() => setHistoryOpen((value) => !value)} type="button" aria-label="Conversation history"><History size={20} /></button>
+            <button className="icon-button agent-history-button" onClick={() => setHistoryOpen((value) => !value)} type="button" aria-label="Conversation history"><History size={20} />{orderUnreadCount ? <span>{orderUnreadCount}</span> : null}</button>
             <button className="icon-button" onClick={startNewChat} type="button" aria-label="New conversation"><MessageSquarePlus size={20} /></button>
             <button className="icon-button" onClick={onClose} type="button" aria-label="Close agent"><X size={22} /></button>
           </div>
@@ -282,15 +378,41 @@ export function AgentPanel({
               <div><strong>Conversations</strong><small>Saved on this device</small></div>
               <button type="button" onClick={startNewChat}><MessageSquarePlus size={16} /> New chat</button>
             </header>
-            <div>{threads.toSorted((a, b) => b.updatedAt - a.updatedAt).map((thread) => (
-              <button className={thread.id === activeId ? "active" : ""} type="button" key={thread.id} onClick={() => { setActiveId(thread.id); setHistoryOpen(false); }}>
+            <div>
+              {activeOrderChat ? <button className="active" type="button" onClick={() => setHistoryOpen(false)}>
+                <PackageCheck size={16} />
+                <span><strong>{activeOrderChat.productTitle}</strong><small>{activeOrderChat.orderReference} · order chat</small></span>
+              </button> : null}
+              {threads.toSorted((a, b) => b.updatedAt - a.updatedAt).map((thread) => (
+              <button className={!activeOrderChat && thread.id === activeId ? "active" : ""} type="button" key={thread.id} onClick={() => { setActiveId(thread.id); setActiveOrderChat(undefined); setHistoryOpen(false); }}>
                 <MessageSquarePlus size={16} />
                 <span><strong>{thread.title}</strong><small>{new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(thread.updatedAt)}</small></span>
               </button>
             ))}</div>
           </section> : null}
 
-          <div className="assistant-chat-thread" aria-live="polite">
+          {activeOrderChat ? <div className="assistant-chat-thread assistant-order-chat-thread" aria-live="polite">
+            <div className="assistant-order-chat-card">
+              <PackageCheck size={17} />
+              <div>
+                <strong>{activeOrderChat.productTitle}</strong>
+                <small>{activeOrderChat.orderReference} · chat with {activeOrderChat.counterpartyName}</small>
+              </div>
+            </div>
+            {orderChatError ? <p className="form-error" role="alert">{orderChatError}</p> : null}
+            {orderMessages.length ? orderMessages.map((message) => (
+              <div className={`chat-message chat-message--${message.senderType === orderChatRole ? "user" : "assistant"}`} key={message.id}>
+                {message.senderType === orderChatRole ? null : <span className="chat-avatar"><PackageCheck size={14} /></span>}
+                <div>
+                  {message.attachments?.map((attachment) => attachment.url ? <Image className="chat-message-image" src={attachment.url} alt={attachment.label ?? "Message image"} width={260} height={180} unoptimized key={attachment.id} /> : null)}
+                  <p>{message.body}</p>
+                  <small className="chat-message-context">{message.senderType} · {new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(message.createdAt))}</small>
+                </div>
+              </div>
+            )) : <p className="order-chat-empty">No messages yet. Start with a quick production or delivery question.</p>}
+            {orderChatLoading ? <div className="chat-message chat-message--assistant"><span className="chat-avatar"><PackageCheck size={14} /></span><div className="chat-typing" aria-label="Loading order chat"><i /><i /><i /></div></div> : null}
+            <div ref={chatEndRef} />
+          </div> : <div className="assistant-chat-thread" aria-live="polite">
             {activeThread.messages.map((message) => (
               <div className={`chat-message chat-message--${message.role}`} key={message.id}>
                 {message.role === "assistant" ? <span className="chat-avatar"><Sparkles size={14} /></span> : null}
@@ -314,17 +436,22 @@ export function AgentPanel({
             ))}
             {typing ? <div className="chat-message chat-message--assistant"><span className="chat-avatar"><Sparkles size={14} /></span><div className="chat-typing" aria-label="Agent is typing"><i /><i /><i /></div></div> : null}
             <div ref={chatEndRef} />
-          </div>
+          </div>}
 
-          {activeThread.messages.length < 3 ? <div className="assistant-suggestions" aria-label="Suggested messages">
+          {!activeOrderChat && activeThread.messages.length < 3 ? <div className="assistant-suggestions" aria-label="Suggested messages">
             <button type="button" onClick={() => void sendMessage("Find a meaningful Vietnamese craft gift under 100 USDC.")}>Find product</button>
             <button type="button" onClick={() => void sendMessage("Check my active order and tell me the next action.")}>Check order</button>
             <button type="button" onClick={() => void sendMessage("Draft a polite message asking the seller about lead time.")}>Draft seller message</button>
           </div> : null}
-          <form className="assistant-chat-composer" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
+          {activeOrderChat ? <form className="assistant-chat-composer assistant-order-chat-composer" onSubmit={(event) => { event.preventDefault(); void sendOrderMessage(); }}>
+            <div className="order-chat-emoji-row" aria-label="Quick emoji">{["👍", "🙏", "✅", "📦", "✨"].map((emoji) => <button type="button" key={emoji} onClick={() => setOrderMessageInput((current) => `${current}${current ? " " : ""}${emoji}`)}><SmilePlus size={14} /> {emoji}</button>)}</div>
+            {orderMessageImage ? <div className="order-chat-image-chip"><span>{orderMessageImage.name}</span><button type="button" onClick={() => setOrderMessageImage(undefined)}><X size={14} /> Remove</button></div> : null}
+            <textarea aria-label="Message buyer or seller" placeholder={`Message ${activeOrderChat.counterpartyName}…`} rows={2} value={orderMessageInput} onChange={(event) => setOrderMessageInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendOrderMessage(); } }} />
+            <div><label className="order-chat-upload"><UploadCloud size={14} /> Image<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => setOrderMessageImage(event.target.files?.[0])} /></label><button type="submit" disabled={orderChatLoading || (!orderMessageInput.trim() && !orderMessageImage)} aria-label="Send order message"><Send size={18} /></button></div>
+          </form> : <form className="assistant-chat-composer" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
             <textarea aria-label="Message your personal agent" placeholder={`Ask LOOMON Agent about ${effectiveContext.label}…`} rows={2} value={chatInput} onChange={(event) => setChatInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} />
             <div><span><ShieldCheck size={14} /> App-scoped agent · no silent seller messages</span><button type="submit" disabled={!chatInput.trim() || typing} aria-label="Send message"><Send size={18} /></button></div>
-          </form>
+          </form>}
         </div>
       </aside>
     </div>

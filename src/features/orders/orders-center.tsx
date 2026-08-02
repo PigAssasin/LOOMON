@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import {
   Check,
   Clock3,
@@ -34,6 +33,7 @@ import {
 } from "@/src/domain/escrow-order";
 import { buildOrderProofExplorerUrl } from "@/src/domain/order-proof";
 import type { OrderProofRecord } from "@/src/domain/order-proof";
+import { useAgent } from "@/src/features/agent/agent-provider";
 import { useLoomonSession } from "@/src/features/auth/use-loomon-session";
 import { sessionMatchesWallet } from "@/src/features/auth/sign-in-wallet";
 import { ARC_TESTNET } from "@/src/lib/arc";
@@ -57,6 +57,28 @@ const SINGLE_DEMO_SELLER_ADDRESS = "0xd59aa8db407d4219fe4b104ca4142df14301dec4";
 
 function isSingleDemoSeller(address?: string) {
   return address?.toLowerCase() === SINGLE_DEMO_SELLER_ADDRESS;
+}
+
+function cleanProductTitle(item: CommerceItem) {
+  const catalogProduct = getProductBySlug(item.productSlug);
+  const raw = item.productTitle?.trim();
+  if (catalogProduct && (!raw || raw === item.productSlug || raw.includes("-"))) return catalogProduct.title;
+  if (!raw) return catalogProduct?.title ?? "Custom product";
+  return raw
+    .split(/[-_]+/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function chooseOrderAsset(assets: Array<{ role?: string | null; label?: string | null; url?: string | null }> = []) {
+  const withUrl = assets.filter((asset) => asset.url);
+  return (
+    withUrl.find((asset) => asset.role === "agent_render")
+    ?? withUrl.find((asset) => /selected|approved|preview/i.test(asset.label ?? ""))
+    ?? withUrl.find((asset) => !/uploaded artwork|source/i.test(asset.label ?? ""))
+    ?? withUrl[0]
+  );
 }
 
 const actionCopy: Record<PendingAction["action"], { title: string; placeholder: string; confirm: string }> = {
@@ -242,9 +264,7 @@ export function OrdersCenter() {
       const body = await response.json() as {
         assets?: Array<{ role?: string | null; label?: string | null; url?: string | null }>;
       };
-      const asset = body.assets?.find((candidate) =>
-        candidate.url && candidate.role === "agent_render",
-      ) ?? body.assets?.find((candidate) => candidate.url);
+      const asset = chooseOrderAsset(body.assets);
       return asset?.url ? [item.id, { url: asset.url, label: asset.label ?? "Order image" }] as const : null;
     })).then((results) => {
       if (!active) return;
@@ -744,6 +764,7 @@ function CommerceList({
   onRequestAction: (item: CommerceItem, action: "accept" | "reject" | "request_changes" | "withdraw") => void;
   onOrderAction: (item: CommerceItem, action: "start_production" | "mark_delivered" | "confirm_completion" | "cancel" | "refund") => void;
 }) {
+  const { openAgent } = useAgent();
   if (!items.length) {
     return <OrderStageEmpty index="—" title="Nothing here yet." detail={mode === "buyer" ? "Your next buyer action will appear here." : "New seller activity will appear here."} />;
   }
@@ -752,7 +773,24 @@ function CommerceList({
     <div className="orders-section-title"><h2>{mode === "buyer" ? "Your purchases" : "Your shop"}</h2><span>{items.length}</span></div>
     {compact
       ? <div className="orders-history-list">{items.map((item) => <HistoryRow key={`${item.kind}-${item.id}`} item={item} mode={mode} proof={proofsByOrderId[item.id]} />)}</div>
-      : items.map((item) => <CommerceRow key={`${item.kind}-${item.id}`} item={item} mode={mode} asset={orderAssetsById[item.id]} busy={busy} onRequestAction={onRequestAction} onOrderAction={onOrderAction} />)}
+      : items.map((item) => <CommerceRow
+        key={`${item.kind}-${item.id}`}
+        item={item}
+        mode={mode}
+        asset={orderAssetsById[item.id]}
+        busy={busy}
+        onRequestAction={onRequestAction}
+        onOrderAction={onOrderAction}
+        onOpenMessage={() => openAgent({
+          contextLabel: `${item.reference} · ${cleanProductTitle(item)}`,
+          orderChat: {
+            orderId: item.id,
+            orderReference: item.reference,
+            productTitle: cleanProductTitle(item),
+            counterpartyName: mode === "buyer" ? item.makerName : item.buyerName ?? "Buyer",
+          },
+        })}
+      />)}
   </section>;
 }
 
@@ -763,6 +801,7 @@ function CommerceRow({
   busy,
   onRequestAction,
   onOrderAction,
+  onOpenMessage,
 }: {
   item: CommerceItem;
   mode: OrderMode;
@@ -770,13 +809,15 @@ function CommerceRow({
   busy: boolean;
   onRequestAction: (item: CommerceItem, action: "accept" | "reject" | "request_changes" | "withdraw") => void;
   onOrderAction: (item: CommerceItem, action: "start_production" | "mark_delivered" | "confirm_completion" | "cancel" | "refund") => void;
+  onOpenMessage: () => void;
 }) {
   const product = getProductBySlug(item.productSlug) ?? products[0];
+  const productTitle = cleanProductTitle(item);
   return <article className="order-feature-row seller-request-row order-real-row">
     {asset?.url ? <div className="order-custom-visual"><Image src={asset.url} alt={asset.label} width={520} height={520} unoptimized /></div> : <ProductVisual product={product} />}
     <div className="order-feature-copy">
       <span className="order-stage"><i /> {statusLabel(item.status)}</span>
-      <h3>{item.productTitle}</h3>
+      <h3>{productTitle}</h3>
       <p>{mode === "buyer" ? item.makerName : item.buyerName ?? "Buyer"}</p>
       <dl>
         <div><dt>{item.kind === "order" ? "Order" : "Request"}</dt><dd>{item.reference}</dd></div>
@@ -799,7 +840,7 @@ function CommerceRow({
       {item.kind === "order" && mode === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "confirm_completion")} disabled={busy}><Check size={16} /> Mint NFT</button> : null}
       {item.kind === "order" && mode === "buyer" && item.status === "escrow_funded" ? <button type="button" onClick={() => onOrderAction(item, "cancel")} disabled={busy}>Cancel + refund</button> : null}
       {item.kind === "order" && ["seller_accepted", "in_progress"].includes(item.status) ? <span className="orders-wallet-pill">Legacy · no escrow</span> : null}
-      {item.kind === "order" ? <Link className="order-message-button" href={`/app/orders/${encodeURIComponent(item.reference)}`}><MessageCircle size={16} /> Message</Link> : null}
+      {item.kind === "order" ? <button className="order-message-button" type="button" onClick={onOpenMessage}><MessageCircle size={16} /> Message</button> : null}
     </div>
   </article>;
 }
@@ -824,7 +865,7 @@ function HistoryRow({ item, mode, proof }: { item: CommerceItem; mode: OrderMode
       <strong>{item.reference}</strong>
       <span>{statusLabel(item.status)}</span>
     </div>
-    <p>{item.productTitle}</p>
+    <p>{cleanProductTitle(item)}</p>
     <small>{mode === "buyer" ? item.makerName : item.buyerName ?? "Buyer"} · Qty {item.quantity}</small>
     {explorerUrl ? <a href={explorerUrl} target="_blank" rel="noreferrer">Proof mint tx {tokenId ? `#${tokenId}` : ""} <ExternalLink size={13} /></a> : <em>{proofLabel}</em>}
   </article>;

@@ -11,6 +11,12 @@ type AgentRequest = {
   product?: Product;
   goal?: string;
   contextLabel?: string;
+  orderChat?: {
+    orderId: string;
+    orderReference: string;
+    productTitle: string;
+    counterpartyName: string;
+  };
 };
 
 export type AgentPageContext = {
@@ -66,6 +72,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
         initialProduct={request.product}
         initialGoal={request.goal}
         contextLabel={request.contextLabel}
+        orderChat={request.orderChat}
         requestId={request.id}
         pageContext={pageContext}
       />
