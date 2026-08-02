@@ -132,8 +132,12 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
       workspace = commerceWorkspaceSchema.parse(data ?? emptyCommerceWorkspace);
     }
 
-    const buyerItem = workspace.buyingOrders.find((order) => order.reference === reference);
-    const sellerItem = workspace.sellingOrders.find((order) => order.reference === reference);
+    const buyerItem = workspace.buyingOrders.find((order) =>
+      order.reference === reference || order.id === reference
+    );
+    const sellerItem = workspace.sellingOrders.find((order) =>
+      order.reference === reference || order.id === reference
+    );
     const found = buyerItem ?? sellerItem;
     setItem(found);
     setRole(buyerItem ? "buyer" : "seller");

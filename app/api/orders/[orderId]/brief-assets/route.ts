@@ -32,10 +32,14 @@ async function signBriefAssetsForOrder(orderId: string): Promise<SignedBriefAsse
   const { data: orderBrief } = await admin
     .schema("commerce" as never)
     .from("order_briefs" as never)
-    .select("brief_id" as never)
+    .select("brief_id, selected_render_candidate_id" as never)
     .eq("order_id" as never, orderId)
     .maybeSingle();
-  const briefId = (orderBrief as { brief_id?: string } | null)?.brief_id;
+  const orderBriefRecord = orderBrief as {
+    brief_id?: string;
+    selected_render_candidate_id?: string | null;
+  } | null;
+  const briefId = orderBriefRecord?.brief_id;
   if (!briefId) return { orderId, briefType: null, makerNotes: null, assets: [] };
 
   const { data: brief } = await admin
@@ -52,26 +56,82 @@ async function signBriefAssetsForOrder(orderId: string): Promise<SignedBriefAsse
   } | null;
   if (!briefRecord) return { orderId, briefType: null, makerNotes: null, assets: [] };
 
+  const { data: orderConfigRow } = await admin
+    .schema("commerce" as never)
+    .from("orders" as never)
+    .select("accepted_quote_version_id" as never)
+    .eq("id" as never, orderId)
+    .maybeSingle();
+  const quoteVersionId = (orderConfigRow as { accepted_quote_version_id?: string } | null)
+    ?.accepted_quote_version_id;
+  let requestedConfiguration: Record<string, unknown> = {};
+  if (quoteVersionId) {
+    const { data: quoteVersionRow } = await admin
+      .schema("commerce" as never)
+      .from("quote_versions" as never)
+      .select("quote_request_id" as never)
+      .eq("id" as never, quoteVersionId)
+      .maybeSingle();
+    const quoteRequestId = (quoteVersionRow as { quote_request_id?: string } | null)
+      ?.quote_request_id;
+    if (quoteRequestId) {
+      const { data: itemRow } = await admin
+        .schema("commerce" as never)
+        .from("quote_request_items" as never)
+        .select("requested_configuration" as never)
+        .eq("quote_request_id" as never, quoteRequestId)
+        .limit(1)
+        .maybeSingle();
+      requestedConfiguration = (
+        itemRow as { requested_configuration?: Record<string, unknown> | null } | null
+      )?.requested_configuration ?? {};
+    }
+  }
+  const configuredSourceAssetId =
+    typeof requestedConfiguration.sourceAssetId === "string"
+      ? requestedConfiguration.sourceAssetId
+      : null;
+  const configuredApprovedAssetId =
+    typeof requestedConfiguration.approvedAssetId === "string"
+      ? requestedConfiguration.approvedAssetId
+      : typeof requestedConfiguration.assetId === "string"
+        ? requestedConfiguration.assetId
+        : null;
+  const configuredSelectedCandidateId =
+    typeof requestedConfiguration.selectedCandidateId === "string"
+      ? requestedConfiguration.selectedCandidateId
+      : null;
+
   type SelectedCandidate = { label?: string | null; output_asset_id?: string | null };
   let selectedCandidate: SelectedCandidate | null = null;
-  if (briefRecord.selected_candidate_id) {
+  const selectedCandidateId =
+    briefRecord.selected_candidate_id
+    ?? orderBriefRecord?.selected_render_candidate_id
+    ?? configuredSelectedCandidateId;
+  if (selectedCandidateId) {
     const { data } = await admin
       .schema("customization" as never)
       .from("render_candidates" as never)
       .select("label, output_asset_id" as never)
-      .eq("id" as never, briefRecord.selected_candidate_id)
+      .eq("id" as never, selectedCandidateId)
       .maybeSingle();
     selectedCandidate = data as SelectedCandidate | null;
   }
 
-  const wanted = [
-    briefRecord.source_asset_id
-      ? { id: briefRecord.source_asset_id, label: "Uploaded artwork" }
+  const wantedCandidates = [
+    (briefRecord.source_asset_id ?? configuredSourceAssetId)
+      ? { id: (briefRecord.source_asset_id ?? configuredSourceAssetId) as string, label: "Uploaded artwork" }
       : null,
     selectedCandidate?.output_asset_id
       ? { id: selectedCandidate.output_asset_id, label: selectedCandidate.label || "Selected AI preview" }
       : null,
+    !selectedCandidate?.output_asset_id && configuredApprovedAssetId
+      ? { id: configuredApprovedAssetId, label: "Selected custom preview" }
+      : null,
   ].filter(Boolean) as Array<{ id: string; label: string }>;
+  const wanted = Array.from(
+    new Map(wantedCandidates.map((asset) => [asset.id, asset])).values(),
+  );
   if (!wanted.length) {
     return {
       orderId,

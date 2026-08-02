@@ -816,7 +816,7 @@ function CommerceRow({
   const product = getProductBySlug(item.productSlug) ?? products[0];
   const productTitle = cleanProductTitle(item);
   function openDetail() {
-    if (item.kind === "order") router.push(`/app/orders/${encodeURIComponent(item.reference)}`);
+    if (item.kind === "order") router.push(`/app/orders/${encodeURIComponent(item.id)}`);
   }
   return <article
     className="order-feature-row seller-request-row order-real-row"
