@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   Check,
   Clock3,
@@ -811,9 +812,24 @@ function CommerceRow({
   onOrderAction: (item: CommerceItem, action: "start_production" | "mark_delivered" | "confirm_completion" | "cancel" | "refund") => void;
   onOpenMessage: () => void;
 }) {
+  const router = useRouter();
   const product = getProductBySlug(item.productSlug) ?? products[0];
   const productTitle = cleanProductTitle(item);
-  return <article className="order-feature-row seller-request-row order-real-row">
+  function openDetail() {
+    if (item.kind === "order") router.push(`/app/orders/${encodeURIComponent(item.reference)}`);
+  }
+  return <article
+    className="order-feature-row seller-request-row order-real-row"
+    onClick={openDetail}
+    onKeyDown={(event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openDetail();
+      }
+    }}
+    role={item.kind === "order" ? "link" : undefined}
+    tabIndex={item.kind === "order" ? 0 : undefined}
+  >
     {asset?.url ? <div className="order-custom-visual"><Image src={asset.url} alt={asset.label} width={520} height={520} unoptimized /></div> : <ProductVisual product={product} />}
     <div className="order-feature-copy">
       <span className="order-stage"><i /> {statusLabel(item.status)}</span>
@@ -825,7 +841,7 @@ function CommerceRow({
         <div><dt>Needed by</dt><dd>{item.requiredBy ?? "Flexible"}</dd></div>
       </dl>
     </div>
-    <div className="order-row-actions">
+    <div className="order-row-actions" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
       {item.kind === "request" && mode === "buyer" && ["submitted", "seller_review", "changes_requested"].includes(item.status) ? <button type="button" onClick={() => onRequestAction(item, "withdraw")} disabled={busy}>Withdraw</button> : null}
       {item.kind === "request" && mode === "seller" && ["submitted", "seller_review", "changes_requested"].includes(item.status) ? <>
         <button className="gradient-stroke-button" type="button" onClick={() => onRequestAction(item, "accept")} disabled={busy}>Accept</button>

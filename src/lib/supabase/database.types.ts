@@ -401,6 +401,11 @@ export type Database = {
           p_product_slug: string
           p_quantity: number
           p_required_by: string | null
+          p_source_asset_bytes?: number
+          p_source_asset_path?: string
+          p_source_checksum_sha256?: string
+          p_source_file_name?: string
+          p_source_mime_type?: string
         }
         Returns: Json
       }

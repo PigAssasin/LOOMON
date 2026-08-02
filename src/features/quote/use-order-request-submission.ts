@@ -55,24 +55,45 @@ async function sha256(blob: Blob) {
   ).join("");
 }
 
-async function approvedAsset(session: CustomizationSession) {
+type PreparedAsset = {
+  blob: Blob;
+  role: "agent_render" | "artwork";
+  fileName: string;
+  previewLabel?: string;
+};
+
+async function approvedAssets(session: CustomizationSession): Promise<{
+  approved?: PreparedAsset;
+  source?: PreparedAsset;
+}> {
   const preview = session.previews.find((item) => item.label === session.selectedPreview);
   if (preview) {
     const response = await fetch(preview.url);
     if (!response.ok) throw new Error("The selected preview could not be prepared.");
     return {
-      blob: await response.blob(),
-      role: "agent_render" as const,
-      fileName: `${session.productSlug}-${sanitizeCustomizationFileName(preview.label)}.png`,
-      previewLabel: preview.label,
+      approved: {
+        blob: await response.blob(),
+        role: "agent_render",
+        fileName: `${session.productSlug}-${sanitizeCustomizationFileName(preview.label)}.png`,
+        previewLabel: preview.label,
+      },
+      source: session.file
+        ? {
+            blob: session.file,
+            role: "artwork",
+            fileName: `source-${session.fileName ?? session.file.name}`,
+          }
+        : undefined,
     };
   }
-  if (!session.file) return undefined;
+  if (!session.file) return {};
   return {
-    blob: session.file,
-    role: "artwork" as const,
-    fileName: session.fileName ?? session.file.name,
-    previewLabel: undefined,
+    approved: {
+      blob: session.file,
+      role: "artwork",
+      fileName: session.fileName ?? session.file.name,
+      previewLabel: undefined,
+    },
   };
 }
 
@@ -250,13 +271,15 @@ export function useOrderRequestSubmission({
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Wallet sign-in did not finish.");
+      const userId = user.id;
+      const storage = supabase.storage;
 
       const { error: walletSyncError } = await supabase.rpc("sync_my_web3_wallet", {
         p_address: address,
       });
       if (walletSyncError) throw walletSyncError;
 
-      const asset = await approvedAsset(session);
+      const assets = await approvedAssets(session);
       let assetInput: {
         p_asset_path?: string;
         p_asset_role?: "agent_render" | "artwork";
@@ -265,30 +288,58 @@ export function useOrderRequestSubmission({
         p_asset_bytes?: number;
         p_checksum_sha256?: string;
         p_preview_label?: string;
+        p_source_asset_path?: string;
+        p_source_file_name?: string;
+        p_source_mime_type?: string;
+        p_source_asset_bytes?: number;
+        p_source_checksum_sha256?: string;
       } = {};
 
-      if (asset) {
+      async function uploadPreparedAsset(asset: PreparedAsset, purpose: "approved" | "source") {
         setSubmitState("uploading");
         const mimeType = asset.blob.type || "image/png";
         const uploadedPath = buildCustomizationAssetPath({
-          userId: user.id,
+          userId,
           requestKey: activeRequestKey,
-          fileName: asset.fileName,
+          fileName: `${purpose}-${asset.fileName}`,
         });
-        const { error: uploadError } = await supabase.storage
+        const { error: uploadError } = await storage
           .from("customization-assets")
           .upload(uploadedPath, asset.blob, { contentType: mimeType, upsert: false });
         if (uploadError && !uploadError.message.toLowerCase().includes("already exists")) {
           throw uploadError;
         }
+        return {
+          path: uploadedPath,
+          mimeType,
+          bytes: asset.blob.size,
+          checksum: await sha256(asset.blob),
+        };
+      }
+
+      if (assets.approved) {
+        const uploaded = await uploadPreparedAsset(assets.approved, "approved");
         assetInput = {
-          p_asset_path: uploadedPath,
-          p_asset_role: asset.role,
-          p_file_name: asset.fileName,
-          p_mime_type: mimeType,
-          p_asset_bytes: asset.blob.size,
-          p_checksum_sha256: await sha256(asset.blob),
-          p_preview_label: asset.previewLabel,
+          ...assetInput,
+          p_asset_path: uploaded.path,
+          p_asset_role: assets.approved.role,
+          p_file_name: assets.approved.fileName,
+          p_mime_type: uploaded.mimeType,
+          p_asset_bytes: uploaded.bytes,
+          p_checksum_sha256: uploaded.checksum,
+          p_preview_label: assets.approved.previewLabel,
+        };
+      }
+
+      if (assets.source) {
+        const uploaded = await uploadPreparedAsset(assets.source, "source");
+        assetInput = {
+          ...assetInput,
+          p_source_asset_path: uploaded.path,
+          p_source_file_name: assets.source.fileName,
+          p_source_mime_type: uploaded.mimeType,
+          p_source_asset_bytes: uploaded.bytes,
+          p_source_checksum_sha256: uploaded.checksum,
         };
       }
 

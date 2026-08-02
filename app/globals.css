@@ -747,6 +747,10 @@ button { color: inherit; }
   border: 1px solid var(--color-surface-25);
   border-radius: 24px;
   background: rgba(255,252,225,.025);
+  cursor: pointer;
+}
+.orders-real-list .order-real-row:hover {
+  border-color: rgba(10,228,72,.38);
 }
 
 .orders-real-list .order-real-row .product-visual {
@@ -798,6 +802,37 @@ button { color: inherit; }
 .order-message-button:hover {
   color: var(--color-light-green);
   border-color: rgba(10,228,72,.5);
+}
+.order-brief-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 16px 0;
+  border: 1px solid var(--color-surface-25);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.order-brief-summary div {
+  padding: 13px 14px;
+  border-right: var(--hairline);
+  border-bottom: var(--hairline);
+}
+.order-brief-summary div:nth-child(2n) {
+  border-right: 0;
+}
+.order-brief-summary div:last-child {
+  grid-column: 1 / -1;
+  border-right: 0;
+  border-bottom: 0;
+}
+.order-brief-summary dt {
+  margin-bottom: 5px;
+  color: var(--color-surface-50);
+  font-size: 12px;
+}
+.order-brief-summary dd {
+  margin: 0;
+  white-space: pre-wrap;
 }
 
 .orders-real-list .order-feature-copy > p {

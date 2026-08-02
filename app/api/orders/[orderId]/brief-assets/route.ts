@@ -159,6 +159,10 @@ export async function GET(
   const supabase = await createClient();
   if (!supabase) return NextResponse.json({ error: "Not configured" }, { status: 503 });
 
+  if (walletAddress && await walletCanAccessOrder(orderId, walletAddress)) {
+    return NextResponse.json(await signBriefAssetsForOrder(orderId));
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();

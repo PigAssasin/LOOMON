@@ -30,6 +30,7 @@ import {
   type EscrowAction,
   type EscrowOrderContext,
 } from "@/src/domain/escrow-order";
+import { getProductBySlug } from "@/src/data/products";
 import { sessionMatchesWallet } from "@/src/features/auth/sign-in-wallet";
 import { useLoomonSession } from "@/src/features/auth/use-loomon-session";
 import { ARC_TESTNET } from "@/src/lib/arc";
@@ -63,6 +64,18 @@ type BriefAssets = {
   makerNotes: string | null;
   assets: BriefAsset[];
 };
+
+function cleanProductTitle(item: CommerceItem) {
+  const catalogProduct = getProductBySlug(item.productSlug);
+  const raw = item.productTitle?.trim();
+  if (catalogProduct && (!raw || raw === item.productSlug || raw.includes("-"))) return catalogProduct.title;
+  if (!raw) return catalogProduct?.title ?? "Custom product";
+  return raw
+    .split(/[-_]+/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 export function OrderDetailExperience({ reference }: { reference: string }) {
   const session = useLoomonSession();
@@ -140,7 +153,9 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
       setEscrow(
         escrowData ? escrowOrderContextSchema.safeParse(escrowData).data : undefined,
       );
-      const briefResponse = await fetch(`/api/orders/${found.id}/brief-assets`);
+      const briefResponse = await fetch(
+        `/api/orders/${found.id}/brief-assets${address ? `?address=${encodeURIComponent(address)}` : ""}`,
+      );
       setBriefAssets(briefResponse.ok ? await briefResponse.json() as BriefAssets : undefined);
     } else {
       setEscrow(undefined);
@@ -429,7 +444,7 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
     <Link className="order-back-link" href="/app/orders"><ArrowLeft size={17} /> Back to orders</Link>
     <header className="real-order-header">
       <div className="order-reference"><span>{item.kind === "request" ? "Request" : "Order"}</span><strong>{item.reference}</strong><button type="button" onClick={async () => { await navigator.clipboard.writeText(item.reference); setCopied(true); window.setTimeout(() => setCopied(false), 1200); }}><Copy size={15} /> {copied ? "Copied" : "Copy"}</button></div>
-      <h1>{item.productTitle}</h1>
+      <h1>{cleanProductTitle(item)}</h1>
       <p>{role === "buyer" ? item.makerName : item.buyerName ?? "Buyer"} · {statusLabel(item.status)}</p>
     </header>
     {error || session.error ? <p className="form-error" role="alert">{error || session.error}</p> : null}
@@ -456,6 +471,11 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
       <aside className="order-chat-panel">
         {briefAssets ? <section className="order-brief-assets">
           <header><PackageCheck size={20} /><div><h2>Custom brief</h2><p>{briefAssets.briefType?.replaceAll("_", " ") ?? "Standard product order"}</p></div></header>
+          <dl className="order-brief-summary">
+            <div><dt>Quantity</dt><dd>{item.quantity}</dd></div>
+            <div><dt>Needed by</dt><dd>{item.requiredBy ?? "Flexible"}</dd></div>
+            <div><dt>Order note</dt><dd>{item.note || briefAssets.makerNotes || "No extra note"}</dd></div>
+          </dl>
           {briefAssets.assets.length ? <div className="order-brief-asset-grid">
             {briefAssets.assets.map((asset) => asset.url ? <a href={asset.url} target="_blank" rel="noreferrer" key={asset.id}>
               <Image src={asset.url} alt={asset.label} width={320} height={240} unoptimized />
