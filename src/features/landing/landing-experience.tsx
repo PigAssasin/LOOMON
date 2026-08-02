@@ -65,7 +65,7 @@ export function LandingExperience() {
       <section className="landing-hero">
         <Image data-motion="hero-media" className="landing-hero-image" src="/images/hero-ceramics.png" fill priority alt="Vietnamese handmade ceramics arranged on a dark studio canvas" sizes="100vw" />
         <nav className="landing-docs-link" aria-label="Project documentation">
-          <Link href="/docs">Docs</Link>
+          <Link href="/app/docs">Docs</Link>
         </nav>
         <div className="landing-hero-copy">
           <h1 aria-label="Objects worth making"><span className="landing-line-mask"><span data-motion="hero-line">Objects</span></span><span className="landing-line-mask"><span data-motion="hero-line">worth making.</span></span></h1>
@@ -95,7 +95,7 @@ export function LandingExperience() {
 
       <section className="landing-sellers" id="sellers" data-motion="section">
         <div><h2 data-reveal>Upload once.<br />Stay understandable.</h2></div>
-        <div className="landing-seller-media" data-reveal><Image src="/images/catalog-sheet-ceramics.png" alt="A selection of custom Vietnamese ceramic products" fill sizes="(max-width: 800px) 100vw, 50vw" /></div>
+        <div className="landing-seller-media" data-reveal><Image src="/images/catalog-sheet-loomon-demo.png" alt="A selection of custom Vietnamese ceramic products" fill sizes="(max-width: 800px) 100vw, 50vw" /></div>
         <div className="landing-seller-copy" data-reveal><p>The seller studio turns craft knowledge into clean product versions the agent can search, compare and quote without inventing missing facts.</p><Link className="ghost-button" href="/app/seller/products/new">Open seller studio <ArrowRight size={17} /></Link></div>
       </section>
 

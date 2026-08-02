@@ -4,7 +4,7 @@ import { products } from "@/src/data/products";
 import { ProductVisual } from "@/src/components/product-visual";
 import { formatMoney } from "@/src/lib/money";
 
-const featuredProducts = [products[21], products[9], products[20], products[6], products[2], products[17]];
+const featuredProducts = products;
 
 export function FeaturedProductRail() {
   return (

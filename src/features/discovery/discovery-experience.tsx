@@ -20,14 +20,14 @@ type ProductFocus = { product: Product; origin: DOMRect };
 const hotSearches = [
   { label: "All", query: "" },
   { label: "Celadon", query: "celadon" },
-  { label: "Blue & white", query: "blue-and-white" },
-  { label: "Corporate souvenirs", query: "corporate souvenir" },
+  { label: "Blue & white", query: "blue white lotus" },
+  { label: "Coasters", query: "coaster" },
   { label: "Tea service", query: "tea service" },
+  { label: "Cups", query: "cups" },
+  { label: "Bowls", query: "bowl" },
   { label: "Tableware", query: "tableware" },
-  { label: "Terracotta", query: "terracotta" },
   { label: "Custom logo", query: "logo" },
-  { label: "Hospitality", query: "hospitality" },
-  { label: "Wedding keepsakes", query: "wedding keepsake" },
+  { label: "Souvenirs", query: "souvenir" },
 ] as const;
 
 const sortOptions = [
@@ -121,7 +121,7 @@ export function DiscoveryExperience() {
           {filtered.map((product, index) => <Fragment key={product.id}>
             <ProductCard product={product} index={index} onSelect={(selected, origin) => setFocus({ product: selected, origin })} />
             {showCollections && index === 0 ? <CollectionCard collection={productCollections[0]} onSelect={selectCollection} /> : null}
-            {showCollections && index === 6 ? <CollectionCard collection={productCollections[1]} onSelect={selectCollection} /> : null}
+            {showCollections && index === 2 ? <CollectionCard collection={productCollections[1]} onSelect={selectCollection} /> : null}
           </Fragment>)}
         </div>
         {filtered.length === 0 ? <div className="empty-state"><h3>No exact piece yet.</h3><p>Ask the agent to widen the search without losing your commercial constraints.</p><button className="ghost-button" onClick={() => openAgent({ goal: `Find alternatives for “${search || category}” without losing my requirements.`, contextLabel: "Marketplace search" })} type="button">Ask the agent</button></div> : null}

@@ -63,12 +63,12 @@ insert into catalog.makers(
   default_lead_time_min_days,
   default_lead_time_max_days
 ) values
-  ('lo-may', 'Lò Mây', 'A small-batch stoneware workshop working with quiet glazes and hand-thrown forms.', 'verified', 'Hà Nội', 12, 14, 28),
-  ('dat-studio', 'Đất Studio', 'A Hội An studio preserving visible turning marks and mineral-rich clay bodies.', 'verified', 'Quảng Nam', 12, 12, 24),
-  ('nang-gom', 'Nắng Gốm', 'A Bình Dương practice centered on terracotta, carving and smoke-fired surfaces.', 'verified', 'Bình Dương', 8, 16, 30),
-  ('lam-xuong', 'Lam Xưởng', 'A Huế porcelain studio painting botanical and lotus motifs in cobalt by hand.', 'verified', 'Thừa Thiên Huế', 6, 20, 38),
-  ('moc-nhien', 'Mộc Nhiên', 'A Đà Lạt workshop making small-batch ceramics with wood ash and soft forms.', 'verified', 'Lâm Đồng', 20, 10, 24),
-  ('tre-may-collective', 'Tre Mây Collective', 'A collective pairing family rattan workshops with reusable gift presentation.', 'verified', 'Hà Nội', 25, 16, 32)
+  ('lo-may', 'Lò Mây', 'A small-batch Bát Tràng ceramic workshop for cups, tea sets, bowls and custom coasters.', 'verified', 'Hà Nội', 1, 7, 24),
+  ('dat-studio', 'Đất Studio', 'Archived demo maker kept only for historical test data.', 'suspended', 'Quảng Nam', 1, 12, 24),
+  ('nang-gom', 'Nắng Gốm', 'Archived demo maker kept only for historical test data.', 'suspended', 'Bình Dương', 1, 16, 30),
+  ('lam-xuong', 'Lam Xưởng', 'Archived demo maker kept only for historical test data.', 'suspended', 'Thừa Thiên Huế', 1, 20, 38),
+  ('moc-nhien', 'Mộc Nhiên', 'Archived demo maker kept only for historical test data.', 'suspended', 'Lâm Đồng', 1, 10, 24),
+  ('tre-may-collective', 'Tre Mây Collective', 'Archived demo maker kept only for historical test data.', 'suspended', 'Hà Nội', 1, 16, 32)
 on conflict (slug) do update set
   display_name = excluded.display_name,
   story = excluded.story,
@@ -81,38 +81,28 @@ on conflict (slug) do update set
 do $$
 declare
   slugs text[] := array[
-    'celadon-tea-cups', 'river-speckle-serving-bowl', 'terra-field-vase',
-    'blue-lotus-teapot', 'lotus-indigo-plate', 'cloud-incense-rest',
-    'woven-celebration-box', 'three-seasons-bud-vases', 'morning-rice-bowl-set',
-    'heritage-tea-service', 'ember-water-carafe', 'petal-snack-plate',
-    'indigo-desk-cup', 'quiet-mountain-burner', 'linen-rattan-keepsake',
-    'miniature-moon-vases', 'orchard-sake-cups', 'lotus-sharing-platter',
-    'earthline-table-vase', 'celadon-tea-pair', 'artisan-welcome-box',
-    'blue-leaf-breakfast-set', 'ash-glaze-flower-cup', 'kiln-story-gift-set'
+    'celadon-tea-cups',
+    'blue-lotus-tea-set',
+    'speckled-rice-bowl',
+    'lotus-cup-coasters'
   ];
   titles text[] := array[
-    'Celadon Tea Cups', 'River Speckle Serving Bowl', 'Terra Field Vase',
-    'Blue Lotus Teapot', 'Lotus Indigo Plate', 'Cloud Incense Rest',
-    'Woven Celebration Box', 'Three Seasons Bud Vases', 'Morning Rice Bowl Set',
-    'Heritage Tea Service', 'Ember Water Carafe', 'Petal Snack Plate',
-    'Indigo Desk Cup', 'Quiet Mountain Burner', 'Linen & Rattan Keepsake',
-    'Miniature Moon Vases', 'Orchard Tasting Cups', 'Lotus Sharing Platter',
-    'Earthline Table Vase', 'Celadon Tea Pair', 'Artisan Welcome Box',
-    'Blue Leaf Breakfast Set', 'Ash Glaze Flower Cup', 'Kiln Story Gift Set'
+    'Celadon Tea Cups',
+    'Blue Lotus Tea Set',
+    'Speckled Rice Bowl',
+    'Lotus Cup Coasters'
   ];
   categories text[] := array[
-    'drinkware', 'tableware', 'decor', 'tea', 'tableware', 'decor',
-    'gifts', 'decor', 'tableware', 'tea', 'drinkware', 'tableware',
-    'drinkware', 'decor', 'gifts', 'decor', 'drinkware', 'tableware',
-    'decor', 'tea', 'gifts', 'tableware', 'drinkware', 'gifts'
+    'drinkware',
+    'tea',
+    'tableware',
+    'tableware'
   ];
   maker_slugs text[] := array[
-    'lo-may', 'dat-studio', 'nang-gom', 'lam-xuong',
-    'lam-xuong', 'moc-nhien', 'tre-may-collective', 'lo-may'
+    'lo-may'
   ];
   price_values numeric[] := array[
-    12, 28, 34, 42, 19, 9, 22, 30, 26, 96, 38, 14,
-    16, 18, 27, 24, 11, 54, 20, 29, 46, 62, 15, 58
+    3, 7, 4, 2
   ];
   idx integer;
   maker_key bigint;
@@ -151,9 +141,9 @@ begin
         1,
         'published',
         true,
-        case when idx % 3 = 0 then 8 else 20 end,
-        14 + (idx % 4) * 2,
-        24 + (idx % 5) * 2,
+        1,
+        case when slugs[idx] = 'lotus-cup-coasters' then 7 when slugs[idx] = 'blue-lotus-tea-set' then 14 else 10 end,
+        case when slugs[idx] = 'lotus-cup-coasters' then 14 when slugs[idx] = 'blue-lotus-tea-set' then 24 else 18 end,
         'VN',
         100
       )
