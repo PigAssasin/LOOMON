@@ -103,15 +103,17 @@ export async function GET(
   if (!supabase) return NextResponse.json({ error: "Not configured" }, { status: 503 });
 
   if (walletAddress) {
+    let normalizedWalletAddress: string;
     try {
-      if (getAddress(walletAddress).toLowerCase() === SINGLE_DEMO_SELLER_ADDRESS) {
-        return NextResponse.json(
-          await signBriefAssetsForOrder(orderId),
-          { headers: { "cache-control": "no-store" } },
-        );
-      }
+      normalizedWalletAddress = getAddress(walletAddress).toLowerCase();
     } catch {
       return NextResponse.json({ error: "Invalid wallet address" }, { status: 400 });
+    }
+    if (normalizedWalletAddress === SINGLE_DEMO_SELLER_ADDRESS) {
+      return NextResponse.json(
+        await signBriefAssetsForOrder(orderId),
+        { headers: { "cache-control": "no-store" } },
+      );
     }
   }
 
