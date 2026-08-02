@@ -29,154 +29,37 @@ type SignedBriefAsset = z.infer<typeof briefAssetsSchema> & {
 
 async function signBriefAssetsForOrder(orderId: string): Promise<SignedBriefAsset> {
   const admin = createAdminClient();
-  const { data: orderBrief } = await admin
-    .schema("commerce" as never)
-    .from("order_briefs" as never)
-    .select("brief_id, selected_render_candidate_id" as never)
-    .eq("order_id" as never, orderId)
-    .maybeSingle();
-  const orderBriefRecord = orderBrief as {
-    brief_id?: string;
-    selected_render_candidate_id?: string | null;
-  } | null;
-  const briefId = orderBriefRecord?.brief_id;
-  if (!briefId) return { orderId, briefType: null, makerNotes: null, assets: [] };
-
-  const { data: brief } = await admin
-    .schema("customization" as never)
-    .from("briefs" as never)
-    .select("id, brief_type, maker_notes, source_asset_id, selected_candidate_id" as never)
-    .eq("id" as never, briefId)
-    .maybeSingle();
-  const briefRecord = brief as {
-    brief_type?: string | null;
-    maker_notes?: string | null;
-    source_asset_id?: string | null;
-    selected_candidate_id?: string | null;
-  } | null;
-  if (!briefRecord) return { orderId, briefType: null, makerNotes: null, assets: [] };
-
-  const { data: orderConfigRow } = await admin
-    .schema("commerce" as never)
-    .from("orders" as never)
-    .select("accepted_quote_version_id" as never)
-    .eq("id" as never, orderId)
-    .maybeSingle();
-  const quoteVersionId = (orderConfigRow as { accepted_quote_version_id?: string } | null)
-    ?.accepted_quote_version_id;
-  let requestedConfiguration: Record<string, unknown> = {};
-  if (quoteVersionId) {
-    const { data: quoteVersionRow } = await admin
-      .schema("commerce" as never)
-      .from("quote_versions" as never)
-      .select("quote_request_id" as never)
-      .eq("id" as never, quoteVersionId)
-      .maybeSingle();
-    const quoteRequestId = (quoteVersionRow as { quote_request_id?: string } | null)
-      ?.quote_request_id;
-    if (quoteRequestId) {
-      const { data: itemRow } = await admin
-        .schema("commerce" as never)
-        .from("quote_request_items" as never)
-        .select("requested_configuration" as never)
-        .eq("quote_request_id" as never, quoteRequestId)
-        .limit(1)
-        .maybeSingle();
-      requestedConfiguration = (
-        itemRow as { requested_configuration?: Record<string, unknown> | null } | null
-      )?.requested_configuration ?? {};
-    }
+  const { data, error } = await admin.rpc("server_get_order_brief_assets" as never, {
+    p_order_id: orderId,
+  } as never);
+  if (error) {
+    throw new Error("Brief assets could not be loaded");
   }
-  const configuredSourceAssetId =
-    typeof requestedConfiguration.sourceAssetId === "string"
-      ? requestedConfiguration.sourceAssetId
-      : null;
-  const configuredApprovedAssetId =
-    typeof requestedConfiguration.approvedAssetId === "string"
-      ? requestedConfiguration.approvedAssetId
-      : typeof requestedConfiguration.assetId === "string"
-        ? requestedConfiguration.assetId
-        : null;
-  const configuredSelectedCandidateId =
-    typeof requestedConfiguration.selectedCandidateId === "string"
-      ? requestedConfiguration.selectedCandidateId
-      : null;
-
-  type SelectedCandidate = { label?: string | null; output_asset_id?: string | null };
-  let selectedCandidate: SelectedCandidate | null = null;
-  const selectedCandidateId =
-    briefRecord.selected_candidate_id
-    ?? orderBriefRecord?.selected_render_candidate_id
-    ?? configuredSelectedCandidateId;
-  if (selectedCandidateId) {
-    const { data } = await admin
-      .schema("customization" as never)
-      .from("render_candidates" as never)
-      .select("label, output_asset_id" as never)
-      .eq("id" as never, selectedCandidateId)
-      .maybeSingle();
-    selectedCandidate = data as SelectedCandidate | null;
+  const parsed = briefAssetsSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new Error("Brief assets are malformed");
   }
 
-  const wantedCandidates = [
-    (briefRecord.source_asset_id ?? configuredSourceAssetId)
-      ? { id: (briefRecord.source_asset_id ?? configuredSourceAssetId) as string, label: "Uploaded artwork" }
-      : null,
-    selectedCandidate?.output_asset_id
-      ? { id: selectedCandidate.output_asset_id, label: selectedCandidate.label || "Selected AI preview" }
-      : null,
-    !selectedCandidate?.output_asset_id && configuredApprovedAssetId
-      ? { id: configuredApprovedAssetId, label: "Selected custom preview" }
-      : null,
-  ].filter(Boolean) as Array<{ id: string; label: string }>;
-  const wanted = Array.from(
-    new Map(wantedCandidates.map((asset) => [asset.id, asset])).values(),
-  );
-  if (!wanted.length) {
-    return {
-      orderId,
-      briefType: briefRecord.brief_type ?? null,
-      makerNotes: briefRecord.maker_notes ?? null,
-      assets: [],
-    };
-  }
-
-  const { data: assets } = await admin
-    .schema("customization" as never)
-    .from("assets" as never)
-    .select("id, asset_role, storage_bucket, storage_path, mime_type, metadata" as never)
-    .in("id" as never, wanted.map((asset) => asset.id));
-
-  const rows = (assets ?? []) as Array<{
-    id: string;
-    asset_role: string | null;
-    storage_bucket: string;
-    storage_path: string;
-    mime_type: string | null;
-    metadata?: { fileName?: string } | null;
-  }>;
-  const signedAssets = await Promise.all(wanted.map(async (wantedAsset) => {
-    const asset = rows.find((row) => row.id === wantedAsset.id);
-    if (!asset) return null;
+  const signedAssets = await Promise.all(parsed.data.assets.map(async (asset) => {
     const { data: signed, error: signError } = await admin.storage
-      .from(asset.storage_bucket)
-      .createSignedUrl(asset.storage_path, 60 * 60);
+      .from(asset.bucket)
+      .createSignedUrl(asset.path, 60 * 60);
     return {
       id: asset.id,
-      role: asset.asset_role,
-      bucket: asset.storage_bucket,
-      path: asset.storage_path,
-      mimeType: asset.mime_type,
-      fileName: asset.metadata?.fileName ?? null,
-      label: wantedAsset.label,
+      role: asset.role,
+      bucket: asset.bucket,
+      path: asset.path,
+      mimeType: asset.mimeType,
+      fileName: asset.fileName,
+      label: asset.label,
       url: signError ? null : signed.signedUrl,
     };
   }));
 
   return {
-    orderId,
-    briefType: briefRecord.brief_type ?? null,
-    makerNotes: briefRecord.maker_notes ?? null,
+    orderId: parsed.data.orderId,
+    briefType: parsed.data.briefType,
+    makerNotes: parsed.data.makerNotes,
     assets: signedAssets.filter(Boolean) as SignedBriefAsset["assets"],
   };
 }
