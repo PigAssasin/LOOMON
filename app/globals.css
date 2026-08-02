@@ -1281,14 +1281,13 @@ button { color: inherit; }
 .discovery-hot-searches button:hover, .discovery-hot-searches button.active { color: var(--color-surface-cream); }
 .discovery-hot-searches button.active::after { content: ""; position: absolute; inset: auto 0 5px; height: 2px; background: var(--color-surface-cream); }
 .discovery-section { max-width: none; padding: 140px 4px 140px; }
-.discovery-section .visual-wall { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-flow: dense; grid-auto-rows: clamp(156px, 17vw, 260px); gap: 5px; columns: unset; }
+.discovery-section .visual-wall { --wall-gap: 5px; --wall-columns: 4; display: grid; grid-template-columns: repeat(var(--wall-columns), minmax(0, 1fr)); grid-auto-flow: dense; grid-auto-rows: clamp(180px, calc((100vw - 8px - (var(--wall-gap) * (var(--wall-columns) - 1))) / var(--wall-columns)), 420px); gap: var(--wall-gap); columns: unset; }
 .discovery-section .visual-wall .product-card { min-width: 0; height: 100%; margin: 0; content-visibility: visible; contain-intrinsic-size: auto; }
-.visual-wall .product-card--pattern-0, .visual-wall .product-card--pattern-3, .visual-wall .product-card--pattern-5 { grid-row: span 2; }
-.visual-wall .product-card--pattern-7 { grid-row: span 2; }
+.visual-wall .product-card--pattern-0, .visual-wall .product-card--pattern-1, .visual-wall .product-card--pattern-2, .visual-wall .product-card--pattern-3, .visual-wall .product-card--pattern-4, .visual-wall .product-card--pattern-5, .visual-wall .product-card--pattern-6, .visual-wall .product-card--pattern-7 { grid-column: span 1; grid-row: span 1; }
 .discovery-section .visual-wall .product-card-link { width: 100%; height: 100%; display: block; padding: 0; overflow: hidden; color: inherit; border: 0; border-radius: 2px; background: var(--color-off-black); cursor: pointer; text-align: left; }
 .discovery-section .visual-wall .product-visual { width: 100%; height: 100%; aspect-ratio: auto; }
 .discovery-section .visual-wall .product-card-overlay { padding: 52px 22px 20px; }
-.collection-card { min-width: 0; height: 100%; grid-column: span 2; }
+.collection-card { min-width: 0; height: 100%; grid-column: span 2; grid-row: span 2; }
 .collection-card > button { position: relative; width: 100%; height: 100%; display: block; overflow: hidden; padding: 0; color: var(--color-surface-cream); border: 0; border-radius: 2px; background: var(--color-off-black); cursor: pointer; text-align: left; }
 .collection-card img { object-fit: cover; transition: transform 650ms cubic-bezier(.22,.8,.2,1), filter 300ms ease; }
 .collection-card-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8,9,8,.88) 0%, rgba(8,9,8,.24) 55%, rgba(8,9,8,.08) 100%); transition: background 300ms ease; }
@@ -1300,14 +1299,15 @@ button { color: inherit; }
 .collection-card > button:hover .collection-card-shade, .collection-card > button:focus-visible .collection-card-shade { background: linear-gradient(90deg, rgba(8,9,8,.8) 0%, rgba(8,9,8,.14) 58%, transparent 100%); }
 
 .product-focus-layer { position: fixed; z-index: 90; inset: 0; }
-.product-focus-backdrop { position: absolute; inset: 0; width: 100%; border: 0; background: rgba(0,0,0,.78); opacity: 0; transition: opacity 520ms ease; }
+.product-focus-backdrop { position: absolute; inset: 0; width: 100%; border: 0; background: rgba(0,0,0,.78); opacity: 0; transition: opacity 420ms ease; backdrop-filter: blur(0); }
 .product-focus-layer.is-expanded .product-focus-backdrop { opacity: 1; }
-.product-focus-shell { --focus-x: 0px; --focus-y: 0px; --focus-scale-x: .3; --focus-scale-y: .3; position: fixed; inset: 0; width: 100vw; height: 100dvh; overflow-x: hidden; overflow-y: auto; color: var(--color-surface-cream); background: var(--color-just-black); border-radius: 10px; transform: translate3d(var(--focus-x), var(--focus-y), 0) scale(var(--focus-scale-x), var(--focus-scale-y)); transform-origin: 0 0; transition: transform 560ms cubic-bezier(.22,1,.36,1), border-radius 420ms ease; will-change: transform; }
+.product-focus-shell { --focus-x: 0px; --focus-y: 0px; --focus-scale-x: .3; --focus-scale-y: .3; position: fixed; inset: 0; width: 100vw; height: 100dvh; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; color: var(--color-surface-cream); background: var(--color-just-black); border-radius: 10px; transform: translate3d(var(--focus-x), var(--focus-y), 0) scale(var(--focus-scale-x), var(--focus-scale-y)); transform-origin: 0 0; transition: transform 460ms cubic-bezier(.16,1,.3,1), border-radius 360ms ease, opacity 220ms ease; will-change: transform; }
 .product-focus-layer.is-expanded .product-focus-shell { border-radius: 0; transform: translate3d(0,0,0) scale(1); }
 .product-focus-close { position: fixed; z-index: 3; top: 20px; right: 20px; width: 46px; height: 46px; display: grid; place-items: center; color: var(--color-surface-cream); border: 1px solid rgba(255,252,225,.35); border-radius: 50%; background: rgba(14,16,15,.68); cursor: pointer; opacity: 0; transform: scale(.8); transition: opacity 220ms ease 300ms, transform 220ms ease 300ms; backdrop-filter: blur(14px); }
 .product-focus-layer.is-expanded .product-focus-close { opacity: 1; transform: scale(1); }
-.product-focus-visual { width: min(627px, calc(100vw - 96px)); height: auto; min-height: 0; aspect-ratio: 1; margin: clamp(34px, 6vh, 76px) auto; background-size: 200% 200%; background-repeat: no-repeat; }
-.product-focus-content { max-width: 1380px; margin: 0 auto; padding: 58px 42px 112px; opacity: 0; transform: translateY(24px); transition: opacity 300ms ease 250ms, transform 420ms cubic-bezier(.22,1,.36,1) 250ms; }
+.product-focus-visual { width: min(627px, calc(100vw - 96px)); height: auto; min-height: 0; aspect-ratio: 1; margin: clamp(34px, 6vh, 76px) auto; background-size: 200% 200%; background-repeat: no-repeat; opacity: .96; transform: scale(.985); transition: opacity 360ms ease 120ms, transform 520ms cubic-bezier(.16,1,.3,1) 80ms; }
+.product-focus-layer.is-expanded .product-focus-visual { opacity: 1; transform: scale(1); }
+.product-focus-content { max-width: 1380px; margin: 0 auto; padding: 58px 42px 112px; opacity: 0; transform: translateY(18px); transition: opacity 260ms ease 190ms, transform 360ms cubic-bezier(.16,1,.3,1) 190ms; }
 .product-focus-layer.is-expanded .product-focus-content { opacity: 1; transform: translateY(0); }
 .product-focus-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 48px; padding-bottom: 52px; border-bottom: var(--hairline); }
 .product-focus-heading a { width: max-content; display: flex; align-items: center; gap: 6px; margin-bottom: 18px; color: var(--color-light-green); font-size: 14px; }
@@ -1343,7 +1343,7 @@ button { color: inherit; }
   .discovery-search-header { grid-template-rows: 48px 1fr; gap: 5px; }
   .discovery-hot-searches { gap: 20px; padding: 0 8px; }
   .discovery-section { padding-top: 132px; }
-  .discovery-section .visual-wall { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: clamp(150px, 28vw, 240px); }
+  .discovery-section .visual-wall { --wall-columns: 3; grid-template-columns: repeat(var(--wall-columns), minmax(0, 1fr)); grid-auto-rows: clamp(154px, calc((100vw - 20px - (var(--wall-gap) * (var(--wall-columns) - 1))) / var(--wall-columns)), 280px); }
   .product-focus-visual { width: min(627px, calc(100vw - 64px)); height: auto; min-height: 0; }
   .product-focus-heading { grid-template-columns: 1fr; gap: 12px; }
   .product-focus-price { align-items: flex-start; padding-top: 0; }
@@ -1359,8 +1359,8 @@ button { color: inherit; }
   .discovery-hot-searches { gap: 18px; padding: 0 6px; }
   .discovery-hot-searches button { font-size: 13px; }
   .discovery-section { padding: 128px 3px 112px; }
-  .discovery-section .visual-wall { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 142px; gap: 3px; }
-  .visual-wall .product-card--pattern-7 { grid-column: span 1; }
+  .discovery-section .visual-wall { --wall-gap: 3px; --wall-columns: 2; grid-template-columns: repeat(var(--wall-columns), minmax(0, 1fr)); grid-auto-rows: calc((100vw - 6px - var(--wall-gap)) / 2); gap: var(--wall-gap); }
+  .visual-wall .product-card--pattern-7 { grid-column: span 1; grid-row: span 1; }
   .collection-card-copy { padding: 16px; }
   .collection-card-copy strong { font-size: 25px; }
   .collection-card-copy > span { margin-top: 9px; font-size: 12px; }

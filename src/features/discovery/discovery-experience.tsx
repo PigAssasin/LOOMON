@@ -140,7 +140,7 @@ function ProductFocusView({ focus, onClose }: { focus: ProductFocus; onClose: ()
   const scaleY = focus.origin.height / window.innerHeight;
   const close = useCallback(() => {
     setExpanded(false);
-    window.setTimeout(onClose, 560);
+    window.setTimeout(onClose, 460);
   }, [onClose]);
 
   useEffect(() => {
