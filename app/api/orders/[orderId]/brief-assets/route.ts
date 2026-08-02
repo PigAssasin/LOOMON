@@ -219,8 +219,24 @@ export async function GET(
   const supabase = await createClient();
   if (!supabase) return NextResponse.json({ error: "Not configured" }, { status: 503 });
 
+  if (walletAddress) {
+    try {
+      if (getAddress(walletAddress).toLowerCase() === SINGLE_DEMO_SELLER_ADDRESS) {
+        return NextResponse.json(
+          await signBriefAssetsForOrder(orderId),
+          { headers: { "cache-control": "no-store" } },
+        );
+      }
+    } catch {
+      return NextResponse.json({ error: "Invalid wallet address" }, { status: 400 });
+    }
+  }
+
   if (walletAddress && await walletCanAccessOrder(orderId, walletAddress)) {
-    return NextResponse.json(await signBriefAssetsForOrder(orderId));
+    return NextResponse.json(
+      await signBriefAssetsForOrder(orderId),
+      { headers: { "cache-control": "no-store" } },
+    );
   }
 
   const {
@@ -230,7 +246,10 @@ export async function GET(
     if (!walletAddress || !(await walletCanAccessOrder(orderId, walletAddress))) {
       return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
     }
-    return NextResponse.json(await signBriefAssetsForOrder(orderId));
+    return NextResponse.json(
+      await signBriefAssetsForOrder(orderId),
+      { headers: { "cache-control": "no-store" } },
+    );
   }
 
   const { data, error } = await supabase.rpc("get_order_brief_assets", {
@@ -262,10 +281,13 @@ export async function GET(
     }),
   );
 
-  return NextResponse.json({
-    orderId: parsed.data.orderId,
-    briefType: parsed.data.briefType,
-    makerNotes: parsed.data.makerNotes,
-    assets: signedAssets,
-  });
+  return NextResponse.json(
+    {
+      orderId: parsed.data.orderId,
+      briefType: parsed.data.briefType,
+      makerNotes: parsed.data.makerNotes,
+      assets: signedAssets,
+    },
+    { headers: { "cache-control": "no-store" } },
+  );
 }

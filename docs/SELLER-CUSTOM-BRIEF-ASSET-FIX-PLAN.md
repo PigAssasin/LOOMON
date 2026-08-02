@@ -23,12 +23,30 @@ Buyer can see the uploaded artwork and the selected AI-rendered custom product, 
 
 ## Root-cause checklist
 
-- [ ] Trace client submission payload from customization session.
-- [ ] Verify `submit_customization_quote` stores both source asset and selected preview asset.
-- [ ] Verify prepaid checkout/order creation copies the correct customization brief into `commerce.order_briefs`.
-- [ ] Verify brief asset endpoint returns the same assets to both buyer and seller wallets.
+- [x] Trace client submission payload from customization session.
+- [x] Verify `submit_customization_quote` stores both source asset and selected preview asset.
+- [x] Verify prepaid checkout/order creation copies the correct customization brief into `commerce.order_briefs`.
+- [x] Verify production DB has the correct assets for `LM-26-08-1628D7` and `LM-26-08-25AB25`.
+- [x] Verify seller brief asset endpoint currently fails with `401 Sign-in required`.
+- [ ] Fix brief asset endpoint so the single demo seller wallet can read production brief assets without being blocked by a stale buyer Supabase auth session.
 - [ ] Verify seller order list preview prioritizes custom selected preview.
 - [ ] Verify seller order detail can be opened from both list and direct URL.
+
+## Production finding 2026-08-02
+
+The database is correct for the failing examples:
+
+- `LM-26-08-1628D7` has `sourceAssetId`, `approvedAssetId`, and `selectedCandidateId`.
+- `LM-26-08-25AB25` has `sourceAssetId`, `approvedAssetId`, and `selectedCandidateId`.
+
+The live issue is the server endpoint:
+
+```text
+GET /api/orders/{orderId}/brief-assets?address=0xd59aa8db407d4219fe4b104ca4142df14301dec4
+=> 401 Sign-in required
+```
+
+Because seller UI fetches this endpoint before rendering order card/detail assets, it falls back to the default product visual.
 
 ## Fix plan
 
