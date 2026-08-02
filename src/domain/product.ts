@@ -4,7 +4,12 @@ export type ProductCategory =
   | "Decor"
   | "Tea";
 
-export type ProductImageSource = "ceramics" | "loomon-demo";
+export type ProductImageSource =
+  | "ceramics"
+  | "loomon-demo"
+  | "loomon-cups"
+  | "loomon-bowls"
+  | "loomon-teaware";
 export type ProductImagePosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
 export interface Product {
