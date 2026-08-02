@@ -1,91 +1,175 @@
 # LOOMON
 
-Agent-powered custom souvenir commerce for Vietnamese ceramics, settled on Arc.
+LOOMON is a custom souvenir commerce demo for Vietnamese ceramic craft, powered by an app-native agent and settled through Arc.
 
-LOOMON is a hackathon demo that turns traditional craft shopping into a simple web app flow: browse curated ceramic products, customize with image/text, pay into Arc testnet escrow, let the seller manage fulfillment, then mint an on-chain proof NFT after successful delivery.
+It starts like a simple Web2 shopping experience: browse beautiful products, choose a piece, upload artwork or text, preview the custom result, and place an order. Behind that calm surface, LOOMON uses wallets, Arc escrow, seller actions, order chat, and proof NFTs to show how traditional craft can move into a more trusted digital commerce flow.
 
-## Live links
+Live demo:
 
-- Landing: [https://loomon.vercel.app](https://loomon.vercel.app)
-- App: [https://loomon.vercel.app/app](https://loomon.vercel.app/app)
-- Docs: [https://loomon.vercel.app/docs](https://loomon.vercel.app/docs)
+- [Landing page](https://loomon.vercel.app)
+- [App](https://loomon.vercel.app/app)
+- [Docs](https://loomon.vercel.app/docs)
+
+## Why LOOMON exists
+
+Traditional products often carry stories: a kiln, a workshop, a maker, a material, a region, a memory. But online commerce usually flattens that into a product card and a checkout button.
+
+LOOMON explores a different direction:
+
+- make craft goods easy to discover;
+- let buyers personalize souvenirs without learning Web3;
+- give sellers clear production briefs instead of scattered messages;
+- use Arc for payment trust and verifiable order milestones;
+- use an agent as a practical helper, not a gimmick.
+
+The goal is not to make users "use blockchain". The goal is to let them buy, customize, talk, and receive proof naturally while Arc works quietly underneath.
 
 ## What the demo shows
 
-- Pinterest-style product discovery for Vietnamese ceramic souvenirs.
-- A single demo seller, Lò Mây, used to test the buyer/seller order lifecycle.
-- Optional AI preview rendering using the product reference image plus user artwork/text.
-- Arc testnet prepaid escrow for real wallet-signed order actions.
-- Buyer/seller order center with Incoming, Active and History stages.
-- Order-scoped buyer/seller chat with text, emoji and image attachments.
-- Proof NFT records for completed orders, with Arc explorer links.
-- A constrained Personal Agent that can read app context, search products, summarize order state and prepare safe user actions.
+### Buyer experience
 
-## Buyer flow
+Buyers can:
 
-1. Browse the app or ask the Personal Agent for product suggestions.
-2. Open a product and click `Customize with agent`.
-3. Optionally upload artwork, add printed text, describe placement and render three previews.
-4. Place the order by signing the Arc escrow transaction.
-5. The order appears in Buying → Requests while waiting for seller acceptance.
-6. After seller acceptance, the order moves to Buying → Active.
-7. When the seller marks it delivered, the buyer can mint the proof NFT.
-8. Completed orders and proof transactions appear in History and Profile/Purchased.
+1. browse a Pinterest-style ceramic catalog;
+2. open a product;
+3. customize with optional uploaded artwork, printed text, notes, quantity, and receive date;
+4. optionally generate AI previews of the artwork applied to the product;
+5. place an Arc testnet order;
+6. track the order in Buying;
+7. chat with the seller;
+8. receive a proof NFT after successful delivery.
 
-## Seller flow
+### Seller experience
 
-1. Connect the Lò Mây demo seller wallet.
-2. Open Orders → Selling.
-3. New paid orders appear in Incoming.
-4. Accept moves the order to Active; reject refunds the buyer.
-5. Active orders can be marked delivered or cancelled/refunded.
-6. Delivered/completed orders move into History with proof links when available.
+The demo seller can:
 
-## Arc on-chain scope
+1. see incoming paid orders;
+2. open each order and view the full production brief;
+3. see the buyer's original uploaded image and selected custom preview;
+4. accept, reject/refund, mark delivered, or cancel/refund according to the order stage;
+5. chat with the buyer;
+6. review completed order history.
 
-- Order placement funds the LOOMON escrow pool on Arc testnet.
-- Seller acceptance, rejection/refund, delivery and buyer completion are wallet-signed actions.
-- Completion triggers proof NFT minting/indexing for the order.
-- Supabase stores off-chain product, chat, profile and projection data; Arc is the source of truth for escrow/proof actions.
+### Agent experience
 
-## Tech stack
+The LOOMON agent is designed as a personal commerce assistant:
 
-- Next.js App Router, React, TypeScript
-- Supabase Postgres, RLS-oriented schema and server routes
-- Arc testnet, Viem, Wagmi, RainbowKit
-- Foundry smart contracts
-- Gemini text and image generation APIs
+- helps users find suitable products;
+- explains order status;
+- summarizes buyer/seller messages;
+- drafts messages for the user to send;
+- guides wallet actions without secretly signing for the user;
+- keeps context from the page the user is currently viewing.
 
-## Environment
+The agent is powerful, but intentionally bounded. It can help prepare actions, but final product choice, payments, and messages remain user-controlled.
 
-Copy `.env.example` to `.env.local` and fill local-only values. Never commit `.env.local` or private keys.
+## How Arc fits in
 
-Required public/server variables are documented in `.env.example`.
+LOOMON uses Arc to demonstrate a trust layer for custom commerce:
 
-## Local development
+- buyer payment goes into an Arc testnet escrow flow;
+- seller acceptance, refund, delivery, and buyer completion are wallet-signed actions;
+- after completion, an order proof NFT can represent that the custom purchase happened;
+- Supabase keeps the app data: products, profiles, chat, custom briefs, and order projections.
+
+In plain language: the app feels simple, while Arc records the important commerce milestones.
+
+## Core demo flow
+
+```text
+Discover product
+   -> Customize with artwork/text
+   -> Optional AI preview
+   -> Place Arc order
+   -> Seller reviews full brief
+   -> Seller accepts or refunds
+   -> Buyer and seller chat
+   -> Seller marks delivered
+   -> Buyer confirms and receives proof NFT
+```
+
+## Current scope
+
+LOOMON is a hackathon/demo build. It focuses on ceramic souvenir products and one controlled seller workspace so the full buyer/seller/on-chain lifecycle can be tested clearly.
+
+Implemented demo areas:
+
+- ceramic product discovery;
+- custom order flow;
+- AI product preview generation;
+- buyer/seller order center;
+- seller production brief detail;
+- order-scoped chat with images and emoji;
+- Arc testnet order actions;
+- proof NFT records;
+- profile and purchased proof surfaces;
+- project docs page.
+
+## Tech, briefly
+
+LOOMON uses:
+
+- Next.js and React for the web app;
+- Supabase for product, order, chat, profile, and asset data;
+- Arc testnet contracts for escrow and proof flows;
+- Wagmi/RainbowKit/Viem for wallet interaction;
+- Gemini for agent and image-preview capabilities;
+- Vercel for deployment.
+
+The stack matters less than the product idea: a familiar shopping app that can quietly coordinate agent assistance, seller operations, and verifiable payment milestones.
+
+## Local setup
+
+Create a local env file:
+
+```bash
+cp .env.example .env.local
+```
+
+Fill only your own local values. Never commit `.env.local`, API keys, service-role keys, or private keys.
+
+Install and run:
 
 ```bash
 npm install
 npm run dev
 ```
 
-Quality checks:
+Useful checks:
 
 ```bash
 npm run typecheck
 npm run lint
 npm run build
+npm test
 ```
 
-## Security notes
+## Security and privacy notes
 
-- No private keys or service-role secrets should be committed.
-- Agent actions are constrained: the agent can draft, summarize and guide, but the user signs wallet transactions and manually sends buyer/seller messages.
-- Image/chat APIs validate order access by connected buyer/seller wallet before returning order-scoped data.
+- Secrets are intentionally kept out of the repository.
+- `.env`, `.env.local`, Vercel metadata, build outputs, logs, and contract broadcast artifacts are ignored.
+- Server-only keys should stay in local/Vercel environment variables.
+- The agent does not automatically send buyer/seller messages without user approval.
+- Wallet-signed actions remain explicit user actions.
+- Order images and custom briefs are scoped to the buyer and seller of that order.
+
+## Repository guide
+
+- `app/` - Next.js app routes and API endpoints
+- `src/features/` - main product experiences: discovery, orders, profile, agent, customization
+- `src/domain/` - domain rules and typed app models
+- `supabase/migrations/` - database schema and business logic
+- `contracts/` - Arc testnet smart contract code and tests
+- `docs/` - execution plans, architecture notes, and demo documentation
+- `public/images/` - demo product and landing assets
 
 ## Project docs
 
+- [LOOMON slide brief](docs/LOOMON-SLIDE-BRIEF.md)
 - [Demo polish execution plan](docs/LOOMON-DEMO-POLISH-EXECUTION-PLAN.md)
-- [Slide brief](docs/LOOMON-SLIDE-BRIEF.md)
 - [Implementation notes](docs/IMPLEMENTATION.md)
 - [Project rules](codex.md)
+
+## Status
+
+LOOMON is under active development as a product demo. The current version is intended to communicate the experience: a modern custom souvenir app where Vietnamese craft, agent assistance, and Arc-powered trust meet in one smooth flow.
