@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const productDraftSchema = z.object({
   title: z.string().trim().min(3, "Add a product title"),
-  category: z.enum(["Drinkware", "Tableware", "Decor", "Tea", "Gifts"]),
+  category: z.enum(["Drinkware", "Tableware", "Decor", "Tea"]),
   story: z.string().trim().min(40, "Tell buyers more about the piece and how it is made"),
   material: z.string().trim().min(2, "Choose or add a material"),
   finish: z.string().trim().min(2, "Add the finish or color"),

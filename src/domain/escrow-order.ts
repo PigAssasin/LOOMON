@@ -31,4 +31,5 @@ export type EscrowOrderContext = z.infer<typeof escrowOrderContextSchema>;
 export const confirmEscrowActionSchema = z.object({
   action: escrowActionSchema,
   transactionHash: bytes32Schema,
+  walletAddress: addressSchema.optional(),
 });

@@ -2,28 +2,28 @@ import type { ProductCollection } from "@/src/domain/collection";
 
 export const productCollections: ProductCollection[] = [
   {
-    id: "hue",
-    title: "Huế Collection",
+    id: "bat-trang-tea",
+    title: "Bát Tràng Tea Collection",
     image: "/images/collection-hue.png",
     productSlugs: [
       "blue-lotus-teapot",
-      "lotus-indigo-plate",
       "heritage-tea-service",
-      "indigo-desk-cup",
-      "lotus-sharing-platter",
+      "celadon-tea-cups",
       "blue-leaf-breakfast-set",
+      "celadon-tea-cups",
+      "lotus-indigo-plate",
     ],
   },
   {
-    id: "cups",
-    title: "Cup Collection",
+    id: "ceramic-table",
+    title: "Ceramic Table Collection",
     image: "/images/collection-cups.png",
     productSlugs: [
-      "celadon-tea-cups",
-      "indigo-desk-cup",
-      "orchard-sake-cups",
-      "celadon-tea-pair",
-      "ash-glaze-flower-cup",
+      "river-speckle-serving-bowl",
+      "lotus-sharing-platter",
+      "morning-rice-bowl-set",
+      "petal-snack-plate",
+      "terra-field-vase",
     ],
   },
 ];

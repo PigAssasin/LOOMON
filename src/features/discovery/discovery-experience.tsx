@@ -21,13 +21,13 @@ const hotSearches = [
   { label: "All", query: "" },
   { label: "Celadon", query: "celadon" },
   { label: "Blue & white", query: "blue-and-white" },
-  { label: "Corporate gifts", query: "corporate gift" },
+  { label: "Corporate souvenirs", query: "corporate souvenir" },
   { label: "Tea service", query: "tea service" },
   { label: "Tableware", query: "tableware" },
   { label: "Terracotta", query: "terracotta" },
   { label: "Custom logo", query: "logo" },
   { label: "Hospitality", query: "hospitality" },
-  { label: "Wedding gifts", query: "wedding gift" },
+  { label: "Wedding keepsakes", query: "wedding keepsake" },
 ] as const;
 
 const sortOptions = [

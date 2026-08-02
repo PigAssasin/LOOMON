@@ -11,6 +11,9 @@ import {
   PackageCheck,
   RefreshCw,
   Send,
+  SmilePlus,
+  UploadCloud,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getAddress, keccak256, toBytes } from "viem";
@@ -45,6 +48,7 @@ type ThreadMessage = {
   kind: string;
   structuredBody?: { event?: string; reason?: string } | null;
   createdAt: string;
+  attachments?: Array<{ id: string; label?: string | null; type?: string; url?: string | null }>;
 };
 type BriefAsset = {
   id: string;
@@ -71,6 +75,7 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [briefAssets, setBriefAssets] = useState<BriefAssets>();
   const [message, setMessage] = useState("");
+  const [messageImage, setMessageImage] = useState<File>();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -141,7 +146,15 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
       setEscrow(undefined);
       setBriefAssets(undefined);
     }
-    if (found?.threadId) {
+    if (found?.kind === "order" && address) {
+      const messageResponse = await fetch(
+        `/api/orders/${found.id}/messages?address=${encodeURIComponent(address)}`,
+      );
+      if (messageResponse.ok) {
+        const body = await messageResponse.json() as { messages?: ThreadMessage[] };
+        setMessages(Array.isArray(body.messages) ? body.messages : []);
+      }
+    } else if (found?.threadId) {
       const { data: threadData } = await session.supabase.rpc("list_thread_messages", {
         p_thread_id: found.threadId,
       });
@@ -345,7 +358,7 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
       const response = await fetch(`/api/orders/${item.id}/escrow/confirm`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, transactionHash }),
+        body: JSON.stringify({ action, transactionHash, walletAddress: address }),
       });
       if (!response.ok) {
         const body = await response.json();
@@ -377,18 +390,23 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
 
   async function sendMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!session.supabase || !item?.threadId || !message.trim()) return;
+    if (!item || !address || (!message.trim() && !messageImage)) return;
     setBusy(true);
-    const { error: sendError } = await session.supabase.rpc("send_thread_message", {
-      p_thread_id: item.threadId,
-      p_body: message.trim(),
+    const body = new FormData();
+    body.append("address", address);
+    body.append("body", message.trim());
+    if (messageImage) body.append("image", messageImage);
+    const response = await fetch(`/api/orders/${item.id}/messages`, {
+      method: "POST",
+      body,
     });
     setBusy(false);
-    if (sendError) {
+    if (!response.ok) {
       setError("Your message was not sent. Please try again.");
       return;
     }
     setMessage("");
+    setMessageImage(undefined);
     await load();
   }
 
@@ -448,9 +466,14 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
         </section> : null}
         <header><MessageCircle size={20} /><div><h2>Buyer · Seller chat</h2><p>Messages stay with this order.</p></div></header>
         <div className="order-chat-messages">
-          {messages.length ? messages.map((entry) => entry.kind === "text" ? <article className={`order-chat-message order-chat-message--${entry.senderType}`} key={entry.id}><span>{entry.senderType}</span><p>{entry.body}</p><time>{new Date(entry.createdAt).toLocaleString()}</time></article> : <article className="order-chat-event" key={entry.id}><p>{entry.structuredBody?.event?.replaceAll("_", " ") ?? "Order updated"}</p>{entry.structuredBody?.reason ? <small>{entry.structuredBody.reason}</small> : null}</article>) : <p className="order-chat-empty">No messages yet. Start with a production or delivery question.</p>}
+          {messages.length ? messages.map((entry) => entry.kind === "text" ? <article className={`order-chat-message order-chat-message--${entry.senderType}`} key={entry.id}><span>{entry.senderType}</span>{entry.attachments?.map((attachment) => attachment.url ? <Image className="order-chat-image" src={attachment.url} alt={attachment.label ?? "Chat image"} width={260} height={220} unoptimized key={attachment.id} /> : null)}<p>{entry.body}</p><time>{new Date(entry.createdAt).toLocaleString()}</time></article> : <article className="order-chat-event" key={entry.id}><p>{entry.structuredBody?.event?.replaceAll("_", " ") ?? "Order updated"}</p>{entry.structuredBody?.reason ? <small>{entry.structuredBody.reason}</small> : null}</article>) : <p className="order-chat-empty">No messages yet. Start with a production or delivery question.</p>}
         </div>
-        <form className="order-chat-form" onSubmit={sendMessage}><label><span className="sr-only">Message</span><textarea rows={3} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Write a message…" /></label><button type="submit" disabled={busy || !message.trim()}><Send size={17} /> Send</button></form>
+        <form className="order-chat-form" onSubmit={sendMessage}>
+          <div className="order-chat-emoji-row" aria-label="Quick emoji">{["👍", "🙏", "✅", "📦", "✨"].map((emoji) => <button type="button" key={emoji} onClick={() => setMessage((current) => `${current}${current ? " " : ""}${emoji}`)}><SmilePlus size={14} /> {emoji}</button>)}</div>
+          {messageImage ? <div className="order-chat-image-chip"><span>{messageImage.name}</span><button type="button" onClick={() => setMessageImage(undefined)}><X size={14} /> Remove</button></div> : null}
+          <label><span className="sr-only">Message</span><textarea rows={3} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Write a message…" /></label>
+          <div className="order-chat-submit-row"><label className="order-chat-upload"><UploadCloud size={16} /> Image<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => setMessageImage(event.target.files?.[0])} /></label><button type="submit" disabled={busy || (!message.trim() && !messageImage)}><Send size={17} /> Send</button></div>
+        </form>
       </aside>
     </div>
   </OrderPageShell>;

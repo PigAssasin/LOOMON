@@ -16,7 +16,6 @@ import { loomonEscrowPoolAbi } from "@/src/lib/payments/escrow-pool";
 import { mintOrderProofsForParticipants } from "@/src/server/commerce/order-proof-service";
 import { createAdminClient } from "@/src/lib/supabase/admin";
 import type { Json } from "@/src/lib/supabase/database.types";
-import { createClient } from "@/src/lib/supabase/server";
 
 const eventByAction: Record<EscrowAction, string> = {
   start_production: "ProductionStarted",
@@ -62,29 +61,29 @@ export async function POST(
     return NextResponse.json({ error: "Invalid escrow action" }, { status: 400 });
   }
 
-  const supabase = await createClient();
-  if (!supabase) return NextResponse.json({ error: "Not configured" }, { status: 503 });
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
   const expectedRole =
     input.data.action === "confirm_completion" || input.data.action === "cancel"
       ? "buyer"
       : input.data.action === "dispute"
         ? null
         : "seller";
-  const { data: rawContext, error: contextError } = user
-    ? await supabase.rpc("get_order_escrow_context", { p_order_id: orderId })
+  const admin = createAdminClient();
+  const walletAddress = input.data.walletAddress;
+  const { data: rawContext, error: contextError } = walletAddress
+    ? await admin.rpc("get_wallet_order_escrow_context" as never, {
+      p_order_id: orderId,
+      p_wallet_address: walletAddress.toLowerCase(),
+    } as never)
     : expectedRole
-      ? await createAdminClient().rpc("get_order_escrow_context_for_projection" as never, {
+      ? await admin.rpc("get_order_escrow_context_for_projection" as never, {
         p_order_id: orderId,
         p_role: expectedRole,
       } as never)
-      : { data: null, error: { message: "Sign-in required" } };
+      : { data: null, error: { message: "Wallet address required" } };
   if (contextError || !rawContext) {
     return NextResponse.json(
-      { error: user ? "Order escrow not found" : "Sign-in required" },
-      { status: user ? 404 : 401 },
+      { error: "Order escrow not found for this wallet" },
+      { status: 404 },
     );
   }
   const order = escrowOrderContextSchema.parse(rawContext);
@@ -138,7 +137,6 @@ export async function POST(
         typeof value === "bigint" ? value.toString() : value,
       ]),
     );
-    const admin = createAdminClient();
     const { data: projected, error: projectionError } = await admin.rpc(
       "server_project_escrow_action",
       {

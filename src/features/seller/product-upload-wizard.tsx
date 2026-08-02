@@ -22,7 +22,7 @@ const initialDraft: ProductDraftInput = {
   customizationCapabilities: [],
 };
 
-const examplePrompt = "Bộ ấm trà sen vẽ tay bằng sứ, men lam cobalt. Giá từ 42 USDC, tối thiểu 10 bộ, làm trong 24–35 ngày. Có thể thêm monogram và hộp quà.";
+const examplePrompt = "Bộ ấm trà sen vẽ tay bằng sứ, men lam cobalt. Giá từ 42 USDC, có thể đặt 1 bộ, làm trong 24–35 ngày. Có thể thêm monogram, logo hoặc lời chúc.";
 
 export function ProductUploadWizard() {
   const [draft, setDraft] = useState<ProductDraftInput>(initialDraft);
@@ -80,7 +80,7 @@ export function ProductUploadWizard() {
             <header><div><h2>Product details</h2><p>Review what the agent understood.</p></div><span>Draft</span></header>
             <div className="listing-fields">
               <label className="field-wide"><span>Title</span><input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="Product name" /></label>
-              <label><span>Category</span><select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value as ProductDraftInput["category"] })}>{["Drinkware", "Tableware", "Decor", "Tea", "Gifts"].map((item) => <option key={item}>{item}</option>)}</select></label>
+              <label><span>Category</span><select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value as ProductDraftInput["category"] })}>{["Drinkware", "Tableware", "Decor", "Tea"].map((item) => <option key={item}>{item}</option>)}</select></label>
               <label><span>Material</span><input value={draft.material} onChange={(event) => setDraft({ ...draft, material: event.target.value })} /></label>
               <label><span>Finish</span><input value={draft.finish} onChange={(event) => setDraft({ ...draft, finish: event.target.value })} placeholder="Color or finish" /></label>
               <label><span>From · USDC</span><input type="number" value={draft.priceFrom || ""} onChange={(event) => setDraft({ ...draft, priceFrom: Number(event.target.value) })} /></label>
@@ -91,7 +91,7 @@ export function ProductUploadWizard() {
 
             <div className="listing-customization">
               <label><span><strong>Accept custom orders</strong><small>Let buyers ask the agent for variations.</small></span><input type="checkbox" checked={draft.customizable} onChange={(event) => setDraft({ ...draft, customizable: event.target.checked })} /></label>
-              {draft.customizable ? <div>{["Logo", "Engraving", "Custom color", "Custom size", "Gift packaging", "Message card"].map((capability) => <button className={draft.customizationCapabilities.includes(capability) ? "active" : ""} onClick={() => toggleCapability(capability)} key={capability} type="button">{capability}</button>)}</div> : null}
+              {draft.customizable ? <div>{["2D logo print", "Raised 3D mark", "Engraved text", "Custom motif", "Name personalization", "Gift message"].map((capability) => <button className={draft.customizationCapabilities.includes(capability) ? "active" : ""} onClick={() => toggleCapability(capability)} key={capability} type="button">{capability}</button>)}</div> : null}
             </div>
 
             <footer className="listing-submit"><div><span>Starting at</span><strong>{formatMoney(draft.priceFrom)}</strong></div><button className="gradient-stroke-button" disabled={!validation.success} onClick={() => setSubmitted(true)} type="button">Submit for review</button></footer>
@@ -104,19 +104,19 @@ export function ProductUploadWizard() {
 
 function inferProductDraft(text: string, current: ProductDraftInput): ProductDraftInput {
   const normalized = text.toLowerCase();
-  const category: ProductDraftInput["category"] = /trà|ấm|tea|teapot/.test(normalized) ? "Tea" : /quà|gift|hộp quà|welcome box/.test(normalized) ? "Gifts" : /bát|đĩa|tô|bowl|plate|tableware/.test(normalized) ? "Tableware" : /cốc|ly|cup|mug|drinkware/.test(normalized) ? "Drinkware" : "Decor";
-  const material = /sứ|porcelain/.test(normalized) ? "Porcelain" : /đất nung|terracotta/.test(normalized) ? "Terracotta" : /mây|rattan/.test(normalized) ? "Rattan" : /gỗ|wood/.test(normalized) ? "Wood" : /gốm|stoneware/.test(normalized) ? "Stoneware" : current.material;
+  const category: ProductDraftInput["category"] = /trà|ấm|tea|teapot/.test(normalized) ? "Tea" : /bát|đĩa|tô|bowl|plate|tableware/.test(normalized) ? "Tableware" : /cốc|ly|cup|mug|drinkware/.test(normalized) ? "Drinkware" : "Decor";
+  const material = /sứ|porcelain/.test(normalized) ? "Porcelain" : /đất nung|terracotta/.test(normalized) ? "Terracotta" : /gốm|stoneware|ceramic/.test(normalized) ? "Stoneware" : current.material;
   const finish = /men lam|cobalt|indigo/.test(normalized) ? "Cobalt glaze" : /men ngọc|celadon/.test(normalized) ? "Celadon glaze" : /men tro|ash glaze/.test(normalized) ? "Ash glaze" : /vẽ tay|hand.?painted/.test(normalized) ? "Hand-painted" : current.finish;
   const price = text.match(/(?:giá(?: từ)?|price|from|từ)\s*(\d+(?:[.,]\d+)?)/i);
   const minimum = text.match(/(?:tối thiểu|minimum|moq)\s*(\d+)/i);
   const lead = text.match(/(\d+)\s*[–-]\s*(\d+)\s*(?:ngày|days?)/i);
   const capabilities = [
-    /logo/.test(normalized) ? "Logo" : null,
-    /khắc|engraving/.test(normalized) ? "Engraving" : null,
-    /màu riêng|custom color/.test(normalized) ? "Custom color" : null,
-    /kích thước|custom size/.test(normalized) ? "Custom size" : null,
-    /hộp quà|gift (?:box|packaging)/.test(normalized) ? "Gift packaging" : null,
-    /thiệp|message card/.test(normalized) ? "Message card" : null,
+    /logo/.test(normalized) ? "2D logo print" : null,
+    /nổi|relief|3d/.test(normalized) ? "Raised 3D mark" : null,
+    /khắc|engraving/.test(normalized) ? "Engraved text" : null,
+    /họa tiết|motif/.test(normalized) ? "Custom motif" : null,
+    /tên|name/.test(normalized) ? "Name personalization" : null,
+    /lời chúc|message/.test(normalized) ? "Gift message" : null,
     /monogram/.test(normalized) ? "Monogram" : null,
   ].filter((item): item is string => Boolean(item));
   const firstSentence = text.split(/[.!?\n]/)[0].trim();

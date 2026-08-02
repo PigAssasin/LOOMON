@@ -1,84 +1,91 @@
-# LOOMON — Craft lives on.
+# LOOMON
 
-> **Agent-Powered Custom Souvenir Commerce, Settled on Arc**
+Agent-powered custom souvenir commerce for Vietnamese ceramics, settled on Arc.
 
-🌐 **Landing Page:** [https://loomon.vercel.app](https://loomon.vercel.app)  
-🛍️ **Marketplace App:** [https://loomon.vercel.app/app](https://loomon.vercel.app/app)
+LOOMON is a hackathon demo that turns traditional craft shopping into a simple web app flow: browse curated ceramic products, customize with image/text, pay into Arc testnet escrow, let the seller manage fulfillment, then mint an on-chain proof NFT after successful delivery.
 
-LOOMON is a visual commerce application connecting global buyers with traditional Vietnamese craft workshops. Powered by a contextual AI Agent and settled on Arc Testnet, LOOMON turns a fragmented craft shopping experience into a seamless journey: from discovery and custom preview generation to escrow-backed settlement and on-chain order proof.
+## Live links
 
----
+- Landing: [https://loomon.vercel.app](https://loomon.vercel.app)
+- App: [https://loomon.vercel.app/app](https://loomon.vercel.app/app)
+- Docs: [https://loomon.vercel.app/docs](https://loomon.vercel.app/docs)
 
-## 🌟 Overview & Hackathon Vision
+## What the demo shows
 
-Traditional craft commerce suffers from scattered communication, vague customization requirements, fragmented payments, and a lack of verifiable proof of purchase.
+- Pinterest-style product discovery for Vietnamese ceramic souvenirs.
+- A single demo seller, Lò Mây, used to test the buyer/seller order lifecycle.
+- Optional AI preview rendering using the product reference image plus user artwork/text.
+- Arc testnet prepaid escrow for real wallet-signed order actions.
+- Buyer/seller order center with Incoming, Active and History stages.
+- Order-scoped buyer/seller chat with text, emoji and image attachments.
+- Proof NFT records for completed orders, with Arc explorer links.
+- A constrained Personal Agent that can read app context, search products, summarize order state and prepare safe user actions.
 
-LOOMON solves these problems by combining:
-1. **Pinterest-Style Visual Discovery**: A curated feed of authentic Vietnamese craft products.
-2. **Contextual AI Commerce Agent**: Powered by Gemini, assisting buyers with recommendations, customization previews, and order tracking.
-3. **Programmable Arc Settlement**: Secure USDC prepaid escrow smart contracts on Arc Testnet (`LoomonEscrow.sol`).
-4. **On-Chain Order Proof**: Minting a non-transferable **Order Proof NFT** upon confirmed order completion.
+## Buyer flow
 
----
+1. Browse the app or ask the Personal Agent for product suggestions.
+2. Open a product and click `Customize with agent`.
+3. Optionally upload artwork, add printed text, describe placement and render three previews.
+4. Place the order by signing the Arc escrow transaction.
+5. The order appears in Buying → Requests while waiting for seller acceptance.
+6. After seller acceptance, the order moves to Buying → Active.
+7. When the seller marks it delivered, the buyer can mint the proof NFT.
+8. Completed orders and proof transactions appear in History and Profile/Purchased.
 
-## 🚀 Key Features
+## Seller flow
 
-* 🎨 **Visual Discovery Feed**: Explore authentic artisan products with rich filters and responsive layouts.
-* 🤖 **Personal Commerce Agent**: A unified AI assistant that understands page context, searches catalog data, and guides buyers through ordering.
-* 🖼️ **AI Customization Studio**: Upload artwork, logos, or notes to generate realistic product previews (backed by Gemini) or submit a direct brief to the maker.
-* 🔐 **Arc Testnet Escrow**: Escrow pool contracts ensure buyer funds are securely held until the order is delivered and confirmed.
-* 📜 **Order Proof NFT**: Minted directly to the buyer's wallet as portable, tamper-proof evidence of purchase and completion.
-* 📦 **Seller Management**: Dedicated dashboard for makers to accept orders, manage production milestones, and release escrow funds.
+1. Connect the Lò Mây demo seller wallet.
+2. Open Orders → Selling.
+3. New paid orders appear in Incoming.
+4. Accept moves the order to Active; reject refunds the buyer.
+5. Active orders can be marked delivered or cancelled/refunded.
+6. Delivered/completed orders move into History with proof links when available.
 
----
+## Arc on-chain scope
 
-## 🛠️ Architecture & Tech Stack
+- Order placement funds the LOOMON escrow pool on Arc testnet.
+- Seller acceptance, rejection/refund, delivery and buyer completion are wallet-signed actions.
+- Completion triggers proof NFT minting/indexing for the order.
+- Supabase stores off-chain product, chat, profile and projection data; Arc is the source of truth for escrow/proof actions.
 
-LOOMON keeps blockchain complexity hidden behind a modern Web2-like interface while utilizing Arc for transparent, programmable settlement.
+## Tech stack
 
-* **Frontend**: Next.js (App Router), React, TypeScript, GSAP Animations, Custom Dark Editorial Design System.
-* **Database & Backend**: Supabase Postgres (Normalized schema, Row Level Security, FTS & Vector-ready documents).
-* **AI Engine**: Google Gemini API (Text model for assistant dialogue, Image model for preview rendering).
-* **Blockchain & Web3**: Arc Testnet (Chain ID `5042002`), Viem / Wagmi / RainbowKit, Foundry (`LoomonEscrow.sol`).
+- Next.js App Router, React, TypeScript
+- Supabase Postgres, RLS-oriented schema and server routes
+- Arc testnet, Viem, Wagmi, RainbowKit
+- Foundry smart contracts
+- Gemini text and image generation APIs
 
----
+## Environment
 
-## 🔄 Core User Flow
+Copy `.env.example` to `.env.local` and fill local-only values. Never commit `.env.local` or private keys.
 
+Required public/server variables are documented in `.env.example`.
+
+## Local development
+
+```bash
+npm install
+npm run dev
 ```
-[ Visual Discovery ] ➔ [ Consult AI Agent ] ➔ [ Customize Design ] 
-                                                      │
-[ Order Proof NFT ] ⬅ [ Confirm Delivery ] ⬅ [ Arc Escrow Payment ]
+
+Quality checks:
+
+```bash
+npm run typecheck
+npm run lint
+npm run build
 ```
 
-1. **Discover**: Browse craft collections or ask the Personal Agent for recommendations.
-2. **Customize**: Choose a product, upload reference assets, generate AI preview candidates or send a maker brief.
-3. **Pay & Escrow**: Approve order details and fund the Arc Testnet USDC escrow contract.
-4. **Fulfill & Deliver**: The maker receives structured order specs and updates production milestones.
-5. **Confirm & Prove**: Upon delivery confirmation, funds are released and an **Order Proof NFT** is minted to the buyer's wallet.
+## Security notes
 
----
+- No private keys or service-role secrets should be committed.
+- Agent actions are constrained: the agent can draft, summarize and guide, but the user signs wallet transactions and manually sends buyer/seller messages.
+- Image/chat APIs validate order access by connected buyer/seller wallet before returning order-scoped data.
 
-## ⛓️ Arc Testnet Smart Contracts
+## Project docs
 
-* **Chain ID**: `5042002`
-* **RPC Endpoint**: `https://rpc.testnet.arc.network`
-* **Explorer**: `https://testnet.arcscan.app`
-* **USDC Token Interface**: `0x3600000000000000000000000000000000000000`
-
-Smart contract code and Foundry tests reside in the [`contracts/`](contracts/) directory.
-
----
-
-## 📄 Project Documentation
-
-* [LOOMON Presentation Slide Brief](docs/LOOMON-SLIDE-BRIEF.md)
-* [Master Build Plan](docs/PLAN.md)
-* [Implementation Status](docs/IMPLEMENTATION.md)
-* [Project Codex & Rules](codex.md)
-
----
-
-## ⚖️ License & Hackathon Notice
-
-Built for the **Arc Hackathon**. LOOMON demonstrates how Arc smart contracts and AI agents enable frictionless, trustless commerce for traditional crafts.
+- [Demo polish execution plan](docs/LOOMON-DEMO-POLISH-EXECUTION-PLAN.md)
+- [Slide brief](docs/LOOMON-SLIDE-BRIEF.md)
+- [Implementation notes](docs/IMPLEMENTATION.md)
+- [Project rules](codex.md)

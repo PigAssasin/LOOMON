@@ -1,10 +1,12 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import {
   Check,
   Clock3,
   ExternalLink,
+  MessageCircle,
   PackageCheck,
   ShoppingBag,
   Store,
@@ -97,7 +99,6 @@ export function OrdersCenter() {
   const [workspace, setWorkspace] = useState<CommerceWorkspace>(emptyCommerceWorkspace);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [needsWalletVerification, setNeedsWalletVerification] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>();
   const [actionBusy, setActionBusy] = useState(false);
   const setActionStatus = useCallback((message?: string) => {
@@ -119,7 +120,6 @@ export function OrdersCenter() {
     const data = await response.json();
     setWorkspace(commerceWorkspaceSchema.parse(data));
     setClaimableMakers([]);
-    setNeedsWalletVerification(false);
     return true;
   }, [address]);
 
@@ -132,7 +132,6 @@ export function OrdersCenter() {
     const data = await response.json();
     setWorkspace(commerceWorkspaceSchema.parse(data));
     setClaimableMakers([]);
-    setNeedsWalletVerification(false);
     return true;
   }, [address]);
 
@@ -152,7 +151,6 @@ export function OrdersCenter() {
     if (!authData.session) {
       if (!(await loadSingleDemoSellerWorkspace()) && !(await loadWalletBuyerWorkspace())) {
         setWorkspace(emptyCommerceWorkspace);
-        setNeedsWalletVerification(false);
       }
       if (!silent) setLoading(false);
       return;
@@ -161,12 +159,10 @@ export function OrdersCenter() {
       if (!(await loadSingleDemoSellerWorkspace()) && !(await loadWalletBuyerWorkspace())) {
         await supabase.auth.signOut();
         setWorkspace(emptyCommerceWorkspace);
-        setNeedsWalletVerification(false);
       }
       if (!silent) setLoading(false);
       return;
     }
-    setNeedsWalletVerification(false);
 
     const [{ data, error: workspaceError }, { data: makers }] = await Promise.all([
       supabase.rpc("get_my_commerce_workspace"),
@@ -290,7 +286,6 @@ export function OrdersCenter() {
   }, [address]);
 
   async function connectAndLoad() {
-    setNeedsWalletVerification(false);
     if (await ensureSession()) await loadWorkspace();
   }
 
@@ -543,7 +538,7 @@ export function OrdersCenter() {
       const response = await fetch(`/api/orders/${item.id}/escrow/confirm`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, transactionHash }),
+        body: JSON.stringify({ action, transactionHash, walletAddress: address }),
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) {
@@ -644,14 +639,7 @@ export function OrdersCenter() {
         <button className={mode === "seller" ? "active" : ""} aria-pressed={mode === "seller"} onClick={() => setMode("seller")} type="button"><Store size={19} /><span><strong>Selling</strong><small>{selling.length} total</small></span></button>
       </nav>
 
-      {needsWalletVerification ? (
-        <OrderStageEmpty
-          index="01"
-          title="Sync this wallet."
-          detail="Use this only when you want LOOMON to load private orders for the connected wallet."
-          action={<button className="gradient-stroke-button" type="button" onClick={() => void connectAndLoad()} disabled={sessionBusy}>Sync wallet</button>}
-        />
-      ) : !isAuthenticated && !isConnected ? (
+      {!isAuthenticated && !isConnected ? (
         <OrderStageEmpty
           index="01"
           title="Connect your wallet to view orders."
@@ -800,7 +788,6 @@ function CommerceRow({
       {item.kind === "request" && mode === "buyer" && ["submitted", "seller_review", "changes_requested"].includes(item.status) ? <button type="button" onClick={() => onRequestAction(item, "withdraw")} disabled={busy}>Withdraw</button> : null}
       {item.kind === "request" && mode === "seller" && ["submitted", "seller_review", "changes_requested"].includes(item.status) ? <>
         <button className="gradient-stroke-button" type="button" onClick={() => onRequestAction(item, "accept")} disabled={busy}>Accept</button>
-        <button type="button" onClick={() => onRequestAction(item, "request_changes")} disabled={busy}>Request changes</button>
         <button type="button" onClick={() => onRequestAction(item, "reject")} disabled={busy}>Reject</button>
       </> : null}
       {item.kind === "order" && mode === "seller" && item.status === "escrow_funded" ? <>
@@ -812,6 +799,7 @@ function CommerceRow({
       {item.kind === "order" && mode === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "confirm_completion")} disabled={busy}><Check size={16} /> Mint NFT</button> : null}
       {item.kind === "order" && mode === "buyer" && item.status === "escrow_funded" ? <button type="button" onClick={() => onOrderAction(item, "cancel")} disabled={busy}>Cancel + refund</button> : null}
       {item.kind === "order" && ["seller_accepted", "in_progress"].includes(item.status) ? <span className="orders-wallet-pill">Legacy · no escrow</span> : null}
+      {item.kind === "order" ? <Link className="order-message-button" href={`/app/orders/${encodeURIComponent(item.reference)}`}><MessageCircle size={16} /> Message</Link> : null}
     </div>
   </article>;
 }
@@ -819,12 +807,17 @@ function CommerceRow({
 function HistoryRow({ item, mode, proof }: { item: CommerceItem; mode: OrderMode; proof?: OrderProofRecord }) {
   const explorerUrl = buildOrderProofExplorerUrl(proof?.mintTransactionHash ?? item.proofTransactionHash ?? null);
   const success = ["proof_minted", "released", "release_hold"].includes(item.status);
+  const tokenId = proof?.tokenId ?? (item.proofTokenId ? String(item.proofTokenId) : null);
   const proofLabel =
     item.status === "seller_marked_delivered"
-      ? "Waiting for buyer mint"
+      ? "Proof ready for buyer"
       : ["buyer_confirmed_received", "proof_pending"].includes(item.status)
-        ? "Indexing NFT tx"
-        : "No NFT";
+        ? "Indexing proof mint"
+        : proof?.mintStatus === "confirmed"
+          ? "Proof minted"
+          : proof?.mintStatus === "failed"
+            ? "Proof mint failed"
+            : "No proof NFT";
   return <article className="orders-history-row">
     <span className={success ? "orders-history-dot orders-history-dot--success" : "orders-history-dot"} />
     <div>
@@ -833,7 +826,7 @@ function HistoryRow({ item, mode, proof }: { item: CommerceItem; mode: OrderMode
     </div>
     <p>{item.productTitle}</p>
     <small>{mode === "buyer" ? item.makerName : item.buyerName ?? "Buyer"} · Qty {item.quantity}</small>
-    {explorerUrl ? <a href={explorerUrl} target="_blank" rel="noreferrer">NFT tx {proof?.tokenId || item.proofTokenId ? `#${proof?.tokenId ?? item.proofTokenId}` : ""} <ExternalLink size={13} /></a> : <em>{success ? "Indexing NFT tx" : proofLabel}</em>}
+    {explorerUrl ? <a href={explorerUrl} target="_blank" rel="noreferrer">Proof mint tx {tokenId ? `#${tokenId}` : ""} <ExternalLink size={13} /></a> : <em>{proofLabel}</em>}
   </article>;
 }
 

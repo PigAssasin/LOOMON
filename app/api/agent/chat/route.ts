@@ -198,52 +198,37 @@ async function loadLiveAgentState(supabase: Awaited<ReturnType<typeof createClie
 
 async function executeExplicitAgentAction(input: {
   message: string;
-  supabase: NonNullable<Awaited<ReturnType<typeof createClient>>>;
   liveState: Awaited<ReturnType<typeof loadLiveAgentState>>;
 }) {
   if (!wantsCancellation(input.message)) return null;
   const reference = publicReferenceFrom(input.message);
-  if (!reference) {
-    return {
-      text: "Tell me the exact LOOMON order reference you want to cancel, for example LM-26-07-XXXXXX.",
-      action: "orders" as const,
-    };
-  }
-
   const workspace = input.liveState?.workspace as {
     buyingOrders?: Array<{ id: string; reference: string; status: string }>;
     sellingOrders?: Array<{ id: string; reference: string; status: string }>;
   } | null;
-  const order = [...(workspace?.buyingOrders ?? []), ...(workspace?.sellingOrders ?? [])]
-    .find((item) => item.reference.toUpperCase() === reference);
+  const orders = [...(workspace?.buyingOrders ?? []), ...(workspace?.sellingOrders ?? [])];
+  const order = reference
+    ? orders.find((item) => item.reference.toUpperCase() === reference)
+    : orders.find((item) => item.status === "escrow_funded") ?? orders[0];
   if (!order) {
     return {
-      text: `I cannot find ${reference} in the orders this wallet can manage.`,
+      text: reference
+        ? `I cannot find ${reference} in the orders this wallet can manage.`
+        : "I cannot find an order for this wallet yet. Open Orders after placing a paid order.",
       action: "orders" as const,
     };
   }
-  if (!["seller_accepted", "in_progress"].includes(order.status)) {
+  if (order.status !== "escrow_funded") {
     return {
-      text: `${reference} cannot be cancelled in its current state. Open Orders to review the available next action.`,
+      text: `${order.reference} cannot be cancelled by the buyer in its current state. Open Orders to review the available next action.`,
       action: "orders" as const,
     };
   }
 
-  const { error } = await input.supabase.rpc("transition_demo_order", {
-    p_order_id: order.id,
-    p_action: "cancel",
-    p_reason: "Cancelled by the user through LOOMON Personal Agent.",
-    p_request_key: crypto.randomUUID(),
-  });
-  return error
-    ? {
-        text: `${reference} changed before I could cancel it. Open Orders and check its latest state.`,
-        action: "orders" as const,
-      }
-    : {
-        text: `${reference} has been cancelled. The buyer and seller timeline was updated, and no NFT will be minted for this order.`,
-        action: "orders" as const,
-      };
+  return {
+    text: `${order.reference} is still waiting for seller acceptance, so it can be cancelled and refunded. Open Orders, choose Buying → Requests, then click "Cancel + refund" to sign the Arc transaction.`,
+    action: "orders" as const,
+  };
 }
 
 export async function POST(request: Request) {
@@ -288,7 +273,7 @@ export async function POST(request: Request) {
         structured: { context: context.label ?? "LOOMON" },
       });
       liveState = await loadLiveAgentState(supabase);
-      const operation = await executeExplicitAgentAction({ message, supabase, liveState });
+      const operation = await executeExplicitAgentAction({ message, liveState });
       if (operation) {
         const result = {
           ...operation,

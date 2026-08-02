@@ -2,10 +2,9 @@ export type ProductCategory =
   | "Drinkware"
   | "Tableware"
   | "Decor"
-  | "Tea"
-  | "Gifts";
+  | "Tea";
 
-export type ProductImageSource = "ceramics" | "gifts";
+export type ProductImageSource = "ceramics";
 export type ProductImagePosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
 export interface Product {

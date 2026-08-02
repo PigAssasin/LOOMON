@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import {
   BadgeCheck,
@@ -24,7 +25,7 @@ import { SiteHeader } from "@/src/components/site-header";
 import { products } from "@/src/data/products";
 import { stores } from "@/src/data/stores";
 import { buildOrderProofExplorerUrl, type OrderProofRecord } from "@/src/domain/order-proof";
-import { commerceWorkspaceSchema, emptyCommerceWorkspace } from "@/src/domain/commerce-workspace";
+import { commerceWorkspaceSchema, emptyCommerceWorkspace, type CommerceItem } from "@/src/domain/commerce-workspace";
 import { useLoomonSession } from "@/src/features/auth/use-loomon-session";
 import { useFollowedStores } from "@/src/hooks/use-followed-stores";
 
@@ -41,6 +42,7 @@ type ProfileData = {
 };
 
 type PurchasedProof = OrderProofRecord & { orderNumber: string };
+type OrderAssetPreview = { url: string; label: string };
 
 type ProfileDraft = {
   displayName: string;
@@ -68,6 +70,8 @@ export function ProfileExperience() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [proofs, setProofs] = useState<PurchasedProof[]>([]);
+  const [proofItemsByOrderId, setProofItemsByOrderId] = useState<Record<string, CommerceItem>>({});
+  const [proofAssetsByOrderId, setProofAssetsByOrderId] = useState<Record<string, OrderAssetPreview>>({});
   const [commerceCounts, setCommerceCounts] = useState({ buying: 0, selling: 0 });
   const [publishedCount, setPublishedCount] = useState(0);
   const { followed } = useFollowedStores();
@@ -108,14 +112,39 @@ export function ProfileExperience() {
     });
 
     const workspace = commerceWorkspaceSchema.parse(workspaceData ?? emptyCommerceWorkspace);
+    const workspaceItems = [
+      ...workspace.buyingRequests,
+      ...workspace.buyingOrders,
+      ...workspace.sellingRequests,
+      ...workspace.sellingOrders,
+    ];
+    setProofItemsByOrderId(Object.fromEntries(workspaceItems.map((item) => [item.id, item])));
     setCommerceCounts({
       buying: workspace.buyingRequests.length + workspace.buyingOrders.length,
       selling: workspace.sellingRequests.length + workspace.sellingOrders.length,
     });
+    let nextProofs: PurchasedProof[] = [];
     if (proofResponse.ok) {
       const proofData = await proofResponse.json() as { proofs: PurchasedProof[] };
-      setProofs(proofData.proofs);
+      nextProofs = proofData.proofs;
+      setProofs(nextProofs);
     }
+    const proofAssets = await Promise.all(nextProofs.map(async (proof) => {
+      const response = await fetch(`/api/orders/${proof.orderId}/brief-assets`);
+      if (!response.ok) return null;
+      const body = await response.json() as {
+        assets?: Array<{ role?: string | null; label?: string | null; url?: string | null }>;
+      };
+      const asset = body.assets?.find((candidate) =>
+        candidate.url && candidate.role === "agent_render",
+      ) ?? body.assets?.find((candidate) => candidate.url);
+      return asset?.url
+        ? [proof.orderId, { url: asset.url, label: asset.label ?? "Custom order preview" }] as const
+        : null;
+    }));
+    setProofAssetsByOrderId(
+      Object.fromEntries(proofAssets.filter(Boolean) as Array<readonly [string, OrderAssetPreview]>),
+    );
 
     const makerIds = nextProfile.memberships.map((membership) => membership.makerId);
     if (makerIds.length) {
@@ -238,7 +267,7 @@ export function ProfileExperience() {
 
       <section className="profile-purchased">
         <header><div><h2>Purchased</h2><p>Proofs minted after you confirm successful demo delivery.</p></div><span>{proofs.length}</span></header>
-        {proofs.length ? <div className="profile-proof-grid">{proofs.map((proof) => <OrderProofCard key={proof.id} proof={proof} />)}</div> : <div className="profile-proof-empty"><ShoppingBag size={23} /><div><strong>No delivery proofs yet.</strong><p>Your proof appears after the seller marks delivery and you confirm receipt.</p></div><Link href="/app">Explore products</Link></div>}
+        {proofs.length ? <div className="profile-proof-grid">{proofs.map((proof) => <OrderProofCard key={proof.id} proof={proof} item={proofItemsByOrderId[proof.orderId]} asset={proofAssetsByOrderId[proof.orderId]} />)}</div> : <div className="profile-proof-empty"><ShoppingBag size={23} /><div><strong>No delivery proofs yet.</strong><p>Your proof appears after the seller marks delivery and you confirm receipt.</p></div><Link href="/app">Explore products</Link></div>}
       </section>
 
       {profile.memberships.length ? <section className="profile-products">
@@ -260,9 +289,22 @@ function ProfileShell({ children }: { children: React.ReactNode }) {
   return <main><div className="static-header-wrap"><SiteHeader /></div><section className="profile-page">{children}</section></main>;
 }
 
-function OrderProofCard({ proof }: { proof: PurchasedProof }) {
+function OrderProofCard({ proof, item, asset }: { proof: PurchasedProof; item?: CommerceItem; asset?: OrderAssetPreview }) {
   const explorerUrl = buildOrderProofExplorerUrl(proof.mintTransactionHash);
-  return <article className="profile-proof-card"><div className="profile-proof-visual"><span>LOOMON</span><small>DELIVERY PROOF</small><strong>#{proof.tokenId ?? "—"}</strong><em>ARC TESTNET · DEMO</em><code>{proof.orderHash.slice(0, 18)}…</code><i>Buyer-confirmed delivery. No authenticity or investment claim.</i></div><div className="profile-proof-copy"><span className={`profile-proof-status profile-proof-status--${proof.mintStatus}`}>{proof.mintStatus === "confirmed" ? <BadgeCheck size={15} /> : <RefreshCw size={14} />}{proof.mintStatus === "confirmed" ? "Confirmed on Arc" : "Minting"}</span><h3>{proof.orderNumber}</h3><p>Non-transferable proof of the buyer-confirmed demo delivery.</p>{explorerUrl ? <a href={explorerUrl} target="_blank" rel="noreferrer">View transaction <ExternalLink size={14} /></a> : null}</div></article>;
+  const tokenLabel = proof.tokenId ? `#${proof.tokenId}` : "Pending token";
+  return <article className="profile-proof-card">
+    <div className="profile-proof-visual">
+      {asset?.url ? <Image src={asset.url} alt={asset.label} width={520} height={520} unoptimized /> : <>
+        <span>LOOMON</span><small>DELIVERY PROOF</small><strong>{tokenLabel}</strong><em>ARC TESTNET · DEMO</em><code>{proof.orderHash.slice(0, 18)}…</code><i>Buyer-confirmed delivery. No authenticity or investment claim.</i>
+      </>}
+    </div>
+    <div className="profile-proof-copy">
+      <span className={`profile-proof-status profile-proof-status--${proof.mintStatus}`}>{proof.mintStatus === "confirmed" ? <BadgeCheck size={15} /> : <RefreshCw size={14} />}{proof.mintStatus === "confirmed" ? `Minted ${tokenLabel}` : "Minting on Arc"}</span>
+      <h3>{item?.productTitle ?? proof.orderNumber}</h3>
+      <p>{proof.orderNumber}{item?.makerName ? ` · ${item.makerName}` : ""}</p>
+      {explorerUrl ? <a href={explorerUrl} target="_blank" rel="noreferrer">Open mint tx <ExternalLink size={14} /></a> : null}
+    </div>
+  </article>;
 }
 
 function SettingsPanel({ profile, draft, setDraft, onClose, onSave }: { profile: ProfileData; draft: ProfileDraft; setDraft: React.Dispatch<React.SetStateAction<ProfileDraft>>; onClose: () => void; onSave: () => Promise<void> }) {
