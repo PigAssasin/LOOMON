@@ -13,7 +13,7 @@ declare
   order_record commerce.orders%rowtype;
   order_brief_record commerce.order_briefs%rowtype;
   brief_record customization.briefs%rowtype;
-  quote_request_id uuid;
+  target_quote_request_id uuid;
   requested_config jsonb := '{}'::jsonb;
   source_asset_id uuid;
   selected_candidate_id uuid;
@@ -31,14 +31,14 @@ begin
     raise exception 'order_not_found';
   end if;
 
-  select quote_version.quote_request_id into quote_request_id
+  select quote_version.quote_request_id into target_quote_request_id
   from commerce.quote_versions quote_version
   where quote_version.id = order_record.accepted_quote_version_id;
 
   select coalesce(item.requested_configuration, '{}'::jsonb)
     into requested_config
   from commerce.quote_request_items item
-  where item.quote_request_id = quote_request_id
+  where item.quote_request_id = target_quote_request_id
   order by item.id asc
   limit 1;
 
