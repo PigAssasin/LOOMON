@@ -10,6 +10,12 @@ type WalletProvider = {
   }): Promise<unknown>;
 };
 
+const pendingSessions = new Map<string, Promise<Session>>();
+
+function pendingSessionKey(address: `0x${string}`) {
+  return address.toLowerCase();
+}
+
 async function signInWithBridge(
   supabase: SupabaseClient<Database>,
   connector: Connector,
@@ -82,17 +88,14 @@ async function currentSessionWalletMatches(
   return sessionMatchesWallet(session, address);
 }
 
-export async function ensureWalletSession({
-  address,
-  connector,
-  statement,
-  supabase,
-}: {
+export async function ensureWalletSession(input: {
   address: `0x${string}`;
   connector: Connector;
   statement: string;
   supabase: SupabaseClient<Database>;
 }) {
+  const { address, connector, supabase } = input;
+  const key = pendingSessionKey(address);
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -101,25 +104,29 @@ export async function ensureWalletSession({
     await supabase.auth.signOut();
   }
 
-  const wallet = await connector.getProvider();
-  const { data, error } = await supabase.auth.signInWithWeb3({
-    chain: "ethereum",
-    statement,
-    wallet: wallet as never,
-  });
-  if (!error && data.session) return data.session;
+  const pending = pendingSessions.get(key);
+  if (pending) return pending;
 
-  if (!/web3|provider|disabled|not enabled|unsupported/i.test(error?.message ?? "")) {
-    throw error ?? new Error("Wallet sign-in did not finish");
-  }
+  const sessionPromise = (async () => {
+    await signInWithBridge(supabase, connector, address);
+    const {
+      data: { session: bridgedSession },
+      error: bridgedSessionError,
+    } = await supabase.auth.getSession();
+    if (bridgedSessionError || !bridgedSession) {
+      throw bridgedSessionError ?? new Error("Wallet session did not persist");
+    }
+    if (!sessionMatchesWallet(bridgedSession, address)) {
+      await supabase.auth.signOut();
+      throw new Error("Wallet session identity mismatch");
+    }
+    return bridgedSession;
+  })();
 
-  await signInWithBridge(supabase, connector, address);
-  const {
-    data: { session: bridgedSession },
-    error: bridgedSessionError,
-  } = await supabase.auth.getSession();
-  if (bridgedSessionError || !bridgedSession) {
-    throw bridgedSessionError ?? new Error("Wallet session did not persist");
+  pendingSessions.set(key, sessionPromise);
+  try {
+    return await sessionPromise;
+  } finally {
+    pendingSessions.delete(key);
   }
-  return bridgedSession;
 }
