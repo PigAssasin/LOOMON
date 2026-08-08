@@ -362,28 +362,35 @@ export function OrdersCenter() {
     action: "accept" | "reject" | "request_changes" | "withdraw",
     reason = "",
   ) {
+    if (actionBusyRef.current) return;
     if (!supabase) return;
     setBusyOrderId(item.id);
     setActionBusy(true);
+    actionBusyRef.current = true;
     setError("");
-    const { error: actionError } = await supabase.rpc("transition_quote_request", {
-      p_request_id: item.id,
-      p_action: action,
-      p_reason: reason,
-      p_request_key: crypto.randomUUID(),
-    });
-    setActionBusy(false);
-    setBusyOrderId(undefined);
-    setPendingAction(undefined);
-    if (actionError) {
-      setError("This request changed before your action completed. Refresh and try again.");
-      return;
+    try {
+      const { error: actionError } = await supabase.rpc("transition_quote_request", {
+        p_request_id: item.id,
+        p_action: action,
+        p_reason: reason,
+        p_request_key: crypto.randomUUID(),
+      });
+      setPendingAction(undefined);
+      if (actionError) {
+        setError("This request changed before your action completed. Refresh and try again.");
+        return;
+      }
+      await loadWorkspace();
+      if (action === "accept") setSellerTab("active");
+    } finally {
+      actionBusyRef.current = false;
+      setActionBusy(false);
+      setBusyOrderId(undefined);
     }
-    await loadWorkspace();
-    if (action === "accept") setSellerTab("active");
   }
 
   async function transitionRequestOnchain(item: CommerceItem, action: "accept" | "reject") {
+    if (actionBusyRef.current) return;
     if (!isSingleDemoSeller(address)) {
       setError("Switch to the Lò Mây seller wallet to sign this request decision.");
       return;
@@ -448,34 +455,40 @@ export function OrdersCenter() {
     action: "mark_delivered" | "confirm_received" | "report_issue" | "cancel",
     reason = "",
   ) {
+    if (actionBusyRef.current) return;
     if (!supabase) return;
     setBusyOrderId(item.id);
     setActionBusy(true);
+    actionBusyRef.current = true;
     setError("");
-    const { data, error: actionError } = await supabase.rpc("transition_demo_order", {
-      p_order_id: item.id,
-      p_action: action,
-      p_reason: reason,
-      p_request_key: crypto.randomUUID(),
-    });
-    if (!actionError && action === "confirm_received") {
-      const response = await fetch(`/api/orders/${item.id}/proof`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ requestKey: crypto.randomUUID() }),
+    try {
+      const { data, error: actionError } = await supabase.rpc("transition_demo_order", {
+        p_order_id: item.id,
+        p_action: action,
+        p_reason: reason,
+        p_request_key: crypto.randomUUID(),
       });
-      if (!response.ok) {
-        setError("Delivery was confirmed. Your Arc proof is queued and can be retried safely.");
+      if (!actionError && action === "confirm_received") {
+        const response = await fetch(`/api/orders/${item.id}/proof`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ requestKey: crypto.randomUUID() }),
+        });
+        if (!response.ok) {
+          setError("Delivery was confirmed. Your Arc proof is queued and can be retried safely.");
+        }
       }
+      setPendingAction(undefined);
+      if (actionError) {
+        setError("This order changed before your action completed. Refresh and try again.");
+        return;
+      }
+      if (data) await loadWorkspace();
+    } finally {
+      actionBusyRef.current = false;
+      setActionBusy(false);
+      setBusyOrderId(undefined);
     }
-    setActionBusy(false);
-    setBusyOrderId(undefined);
-    setPendingAction(undefined);
-    if (actionError) {
-      setError("This order changed before your action completed. Refresh and try again.");
-      return;
-    }
-    if (data) await loadWorkspace();
   }
 
   async function loadEscrowContext(item: CommerceItem): Promise<EscrowOrderContext | null> {
@@ -832,7 +845,6 @@ function CommerceRow({
   const product = getProductBySlug(item.productSlug) ?? products[0];
   const productTitle = cleanProductTitle(item);
   const rowBusy = busy && busyOrderId === item.id;
-  const siblingBusy = busy && Boolean(busyOrderId) && busyOrderId !== item.id;
   function openDetail() {
     if (item.kind === "order") router.push(`/app/orders/${encodeURIComponent(item.id)}`);
   }
@@ -860,20 +872,19 @@ function CommerceRow({
       </dl>
     </div>
     <div className="order-row-actions" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
-      {item.kind === "request" && mode === "buyer" && ["submitted", "seller_review", "changes_requested"].includes(item.status) ? <button type="button" onClick={() => onRequestAction(item, "withdraw")} disabled={rowBusy || siblingBusy}>Withdraw</button> : null}
+      {item.kind === "request" && mode === "buyer" && ["submitted", "seller_review", "changes_requested"].includes(item.status) ? <button type="button" onClick={() => onRequestAction(item, "withdraw")} disabled={rowBusy}>Withdraw</button> : null}
       {item.kind === "request" && mode === "seller" && ["submitted", "seller_review", "changes_requested"].includes(item.status) ? <>
-        <button className="gradient-stroke-button" type="button" onClick={() => onRequestAction(item, "accept")} disabled={rowBusy || siblingBusy}>{rowBusy ? "Accepting..." : "Accept"}</button>
-        <button type="button" onClick={() => onRequestAction(item, "reject")} disabled={rowBusy || siblingBusy}>{rowBusy ? "Rejecting..." : "Reject"}</button>
+        <button className="gradient-stroke-button" type="button" onClick={() => onRequestAction(item, "accept")} disabled={rowBusy}>{rowBusy ? "Accepting..." : "Accept"}</button>
+        <button type="button" onClick={() => onRequestAction(item, "reject")} disabled={rowBusy}>{rowBusy ? "Rejecting..." : "Reject"}</button>
       </> : null}
       {item.kind === "order" && mode === "seller" && item.status === "escrow_funded" ? <>
-        <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "start_production")} disabled={rowBusy || siblingBusy}>{rowBusy ? "Accepting..." : "Accept"}</button>
-        <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={rowBusy || siblingBusy}>{rowBusy ? "Working..." : "Reject + refund"}</button>
+        <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "start_production")} disabled={rowBusy}>{rowBusy ? "Accepting..." : "Accept"}</button>
+        <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={rowBusy}>{rowBusy ? "Working..." : "Reject + refund"}</button>
       </> : null}
-      {item.kind === "order" && mode === "seller" && item.status === "in_production" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "mark_delivered")} disabled={rowBusy || siblingBusy}><PackageCheck size={16} /> {rowBusy ? "Marking..." : "Mark delivered"}</button> : null}
-      {item.kind === "order" && mode === "seller" && item.status === "in_production" ? <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={rowBusy || siblingBusy}>{rowBusy ? "Working..." : "Cancel/refund"}</button> : null}
-      {item.kind === "order" && mode === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "confirm_completion")} disabled={rowBusy || siblingBusy}><Check size={16} /> {rowBusy ? "Minting..." : "Mint NFT"}</button> : null}
-      {item.kind === "order" && mode === "buyer" && item.status === "escrow_funded" ? <button type="button" onClick={() => onOrderAction(item, "cancel")} disabled={rowBusy || siblingBusy}>{rowBusy ? "Cancelling..." : "Cancel + refund"}</button> : null}
-      {siblingBusy ? <span className="orders-wallet-pill">Another order is signing</span> : null}
+      {item.kind === "order" && mode === "seller" && item.status === "in_production" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "mark_delivered")} disabled={rowBusy}><PackageCheck size={16} /> {rowBusy ? "Marking..." : "Mark delivered"}</button> : null}
+      {item.kind === "order" && mode === "seller" && item.status === "in_production" ? <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={rowBusy}>{rowBusy ? "Working..." : "Cancel/refund"}</button> : null}
+      {item.kind === "order" && mode === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "confirm_completion")} disabled={rowBusy}><Check size={16} /> {rowBusy ? "Minting..." : "Mint NFT"}</button> : null}
+      {item.kind === "order" && mode === "buyer" && item.status === "escrow_funded" ? <button type="button" onClick={() => onOrderAction(item, "cancel")} disabled={rowBusy}>{rowBusy ? "Cancelling..." : "Cancel + refund"}</button> : null}
       {item.kind === "order" && ["seller_accepted", "in_progress"].includes(item.status) ? <span className="orders-wallet-pill">Legacy · no escrow</span> : null}
       {item.kind === "order" ? <button className="order-message-button" type="button" onClick={onOpenMessage}><MessageCircle size={16} /> Message</button> : null}
     </div>
