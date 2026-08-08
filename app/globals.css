@@ -56,6 +56,13 @@
 .listing-fields input, .listing-fields select, .listing-fields textarea { width: 100%; padding: 10px 0; color: var(--color-surface-cream); border: 0; border-bottom: 1px solid var(--color-surface-25); border-radius: 0; outline: 0; background: transparent; font: inherit; }
 .listing-fields input:focus, .listing-fields select:focus, .listing-fields textarea:focus { border-color: var(--color-surface-cream); }
 .listing-fields select option { color: var(--color-just-black); }.listing-fields textarea { resize: vertical; line-height: 1.45; }
+.dark-select { position: relative; }
+.dark-select > button { width: 100%; min-height: 43px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; color: var(--color-surface-cream); border: 0; border-bottom: 1px solid var(--color-surface-25); background: transparent; cursor: pointer; }
+.dark-select > button:hover, .dark-select > button[aria-expanded="true"] { border-bottom-color: var(--color-surface-cream); }
+.dark-select-menu { position: absolute; left: 0; right: 0; top: calc(100% + 8px); z-index: 25; display: grid; gap: 4px; padding: 8px; border: 1px solid var(--color-surface-25); border-radius: 8px; background: rgba(14,16,15,.98); box-shadow: 0 24px 54px rgba(0,0,0,.42); }
+.dark-select-menu > button { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 10px; color: var(--color-surface-50); text-align: left; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
+.dark-select-menu > button:hover, .dark-select-menu > button.active { color: var(--color-surface-cream); background: rgba(171,255,132,.08); }
+.dark-select-menu > button.active svg { color: var(--color-light-green); }
 .listing-fields .field-wide, .listing-fields .lead-time-field { grid-column: 1 / -1; }
 .lead-time-field > div { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 13px; }.lead-time-field i { color: var(--color-surface-50); font-size: 12px; font-style: normal; }
 .listing-customization { padding: 23px 0; border-top: var(--hairline); }
@@ -1676,6 +1683,68 @@ button { color: inherit; }
 .settings-panel form { display: grid; gap: 28px; padding: 38px 28px; }.settings-panel form > label:not(.settings-toggle) { display: grid; gap: 9px; color: var(--color-surface-50); font-size: 13px; }.settings-panel select, .settings-panel input, .settings-panel textarea { width: 100%; min-height: 48px; padding: 12px 0; color: var(--color-surface-cream); border: 0; border-bottom: 1px solid var(--color-surface-25); border-radius: 0; outline: 0; background: transparent; font: inherit; }.settings-panel select option { color: var(--color-just-black); }.settings-panel textarea { resize: vertical; line-height: 1.45; }
 .edit-profile-panel fieldset { min-width: 0; padding: 0; border: 0; }.edit-profile-panel legend { margin-bottom: 10px; color: var(--color-surface-50); font-size: 13px; }.profile-data-note { margin: -6px 0 0; color: var(--color-surface-50); font-size: 12px; line-height: 1.45; }
 .settings-toggle { display: flex; align-items: center; justify-content: space-between; gap: 22px; padding: 18px 0; border-top: var(--hairline); }.settings-toggle > span { display: grid; gap: 5px; }.settings-toggle small { color: var(--color-surface-50); }.settings-toggle input { position: relative; width: 44px; min-width: 44px; height: 24px; min-height: 24px; appearance: none; padding: 0; border: 1px solid var(--color-surface-25); border-radius: 100px; background: var(--color-off-black); cursor: pointer; transition: background 180ms ease, border-color 180ms ease; }.settings-toggle input::before { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--color-surface-50); transition: transform 180ms ease, background 180ms ease; }.settings-toggle input:checked { border-color: var(--color-shockingly-green); background: rgba(10,228,72,.16); }.settings-toggle input:checked::before { transform: translateX(20px); background: var(--color-shockingly-green); }
+
+.gitbook-docs { min-height: 100vh; color: var(--color-surface-cream); background: #101210; }
+.gitbook-topbar { position: sticky; top: 0; z-index: 35; height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 22px; padding: 0 56px; border-bottom: 1px solid rgba(255,252,225,.12); background: rgba(22,29,23,.96); backdrop-filter: blur(18px); }
+.gitbook-brand { display: inline-flex; align-items: center; gap: 12px; font-weight: 700; }
+.gitbook-brand span { width: 28px; height: 28px; display: grid; place-items: center; color: var(--color-just-black); border-radius: 50%; background: var(--color-light-green); font-size: 11px; }
+.gitbook-search { width: min(360px, 42vw); min-height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 11px; color: var(--color-surface-50); border: 1px solid var(--color-surface-25); border-radius: 9px; background: rgba(14,16,15,.72); }
+.gitbook-search input { width: 100%; min-width: 0; color: var(--color-surface-cream); border: 0; outline: 0; background: transparent; }
+.gitbook-search kbd { padding: 3px 6px; color: var(--color-surface-50); border: 1px solid var(--color-surface-25); border-radius: 5px; font-size: 11px; }
+.gitbook-shell { display: grid; grid-template-columns: 308px minmax(0, 860px); gap: 48px; width: min(1420px, calc(100% - 72px)); margin: 0 auto; }
+.gitbook-sidebar { position: sticky; top: 56px; height: calc(100vh - 56px); overflow-y: auto; padding: 28px 0; border-right: 1px solid rgba(255,252,225,.1); }
+.gitbook-sidebar section { display: grid; gap: 4px; margin-bottom: 26px; }
+.gitbook-sidebar h2 { margin: 0 0 8px; color: var(--color-surface-cream); text-transform: uppercase; font-size: 12px; letter-spacing: 0; }
+.gitbook-sidebar a:not(.gitbook-powered) { min-height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 12px; color: var(--color-surface-50); border-radius: 7px; font-size: 14px; font-weight: 600; }
+.gitbook-sidebar a.active, .gitbook-sidebar a:not(.gitbook-powered):hover { color: var(--color-light-green); background: rgba(171,255,132,.08); }
+.gitbook-sidebar svg { color: var(--color-light-green); }
+.gitbook-powered { min-height: 54px; display: flex; align-items: center; gap: 10px; margin: 28px 20px 0 0; padding: 0 14px; color: var(--color-surface-cream); border: 1px solid var(--color-surface-25); border-radius: 8px; background: rgba(255,252,225,.035); }
+.gitbook-content { min-width: 0; padding: 64px 0 120px; }
+.gitbook-hero, .gitbook-section { scroll-margin-top: 82px; }
+.gitbook-hero { padding-bottom: 48px; border-bottom: 1px solid rgba(255,252,225,.12); }
+.gitbook-hero > span, .gitbook-kicker { display: block; margin: 0 0 16px; color: var(--color-light-green); font-size: 13px; font-weight: 700; }
+.gitbook-hero h1 { max-width: 740px; margin: 0; font-size: clamp(48px, 6vw, 78px); line-height: .92; letter-spacing: -.04em; }
+.gitbook-hero p, .gitbook-section > p, .gitbook-grid-section p { max-width: 760px; color: rgba(255,252,225,.72); font-size: 17px; line-height: 1.65; }
+.gitbook-actions { display: flex; gap: 10px; margin-top: 28px; }
+.gitbook-section { padding: 44px 0; border-bottom: 1px solid rgba(255,252,225,.12); }
+.gitbook-section h2 { max-width: 760px; margin: 0 0 16px; font-size: clamp(31px, 4vw, 46px); line-height: 1; letter-spacing: -.035em; }
+.gitbook-callout { display: flex; align-items: center; gap: 10px; margin-top: 22px; padding: 16px; color: var(--color-surface-cream); border: 1px solid rgba(171,255,132,.28); border-radius: 8px; background: rgba(171,255,132,.055); line-height: 1.45; }
+.gitbook-code { position: relative; margin: 18px 0 22px; padding: 16px 48px 16px 16px; border: 1px solid var(--color-surface-25); border-radius: 8px; background: #0a0c0b; }
+.gitbook-code button { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; display: grid; place-items: center; color: var(--color-surface-50); border: 1px solid var(--color-surface-25); border-radius: 6px; background: transparent; }
+.gitbook-code code { color: var(--color-light-green); overflow-wrap: anywhere; }
+.gitbook-list, .gitbook-step-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.gitbook-list li, .gitbook-step-list p { margin: 0; padding: 14px 0; color: rgba(255,252,225,.72); border-bottom: 1px solid rgba(255,252,225,.09); line-height: 1.5; }
+.gitbook-step-list p { display: flex; align-items: flex-start; gap: 10px; }
+.gitbook-step-list svg { flex: 0 0 auto; margin-top: 2px; color: var(--color-light-green); }
+.gitbook-grid-section { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 34px; align-items: start; }
+.gitbook-mini-panel { display: grid; gap: 10px; padding: 20px; border: 1px solid var(--color-surface-25); border-radius: 8px; background: rgba(255,252,225,.035); }
+.gitbook-mini-panel svg, .gitbook-card-row svg, .gitbook-data-grid svg { color: var(--color-light-green); }
+.gitbook-mini-panel span { color: var(--color-surface-50); font-size: 13px; }
+.gitbook-card-row, .gitbook-data-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.gitbook-card-row div, .gitbook-data-grid div { min-height: 150px; display: grid; align-content: start; gap: 9px; padding: 18px; border: 1px solid var(--color-surface-25); border-radius: 8px; background: rgba(255,252,225,.028); }
+.gitbook-card-row strong, .gitbook-data-grid strong { font-size: 18px; }
+.gitbook-card-row span, .gitbook-data-grid p { margin: 0; color: var(--color-surface-50); line-height: 1.45; }
+
+@media (max-width: 980px) {
+  .gitbook-topbar { padding: 0 20px; }
+  .gitbook-search { width: min(300px, 52vw); }
+  .gitbook-shell { grid-template-columns: 1fr; width: min(100% - 32px, 860px); gap: 0; }
+  .gitbook-sidebar { position: static; height: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 22px 0; border-right: 0; border-bottom: 1px solid rgba(255,252,225,.12); }
+  .gitbook-sidebar section { margin: 0; }
+  .gitbook-powered { grid-column: 1 / -1; margin: 0; }
+  .gitbook-content { padding-top: 38px; }
+  .gitbook-grid-section, .gitbook-card-row, .gitbook-data-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 640px) {
+  .gitbook-topbar { height: auto; min-height: 58px; align-items: stretch; flex-direction: column; padding: 12px 14px; }
+  .gitbook-search { width: 100%; }
+  .gitbook-shell { width: calc(100% - 28px); }
+  .gitbook-sidebar { grid-template-columns: 1fr; }
+  .gitbook-hero h1 { font-size: 46px; }
+  .gitbook-actions { align-items: stretch; flex-direction: column; }
+  .gitbook-grid-section, .gitbook-card-row, .gitbook-data-grid { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 1328px) { .storefront, .profile-page { margin-left: 24px; margin-right: 24px; } }
 @media (max-width: 900px) { .storefront-hero, .profile-page-hero { grid-template-columns: auto 1fr; }.storefront-actions, .profile-hero-actions { grid-column: 1 / -1; flex-direction: row; justify-self: start; }.storefront-overview, .profile-page-intro { grid-template-columns: 1fr; gap: 36px; }.store-product-grid, .profile-product-grid { columns: 3; }.storefront-reviews { grid-template-columns: 1fr; gap: 48px; }.profile-following > div:not(.profile-following-empty), .profile-proof-grid { grid-template-columns: 1fr; } }

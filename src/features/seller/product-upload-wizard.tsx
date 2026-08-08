@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ImagePlus, Send, Sparkles, UploadCloud, X } from "lucide-react";
+import { Check, ChevronDown, ImagePlus, Send, Sparkles, UploadCloud, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -23,6 +23,7 @@ const initialDraft: ProductDraftInput = {
 };
 
 const examplePrompt = "Bộ ấm trà sen vẽ tay bằng sứ, men lam cobalt. Giá từ 42 USDC, có thể đặt 1 bộ, làm trong 24–35 ngày. Có thể thêm monogram, logo hoặc lời chúc.";
+const productCategories: ProductDraftInput["category"][] = ["Drinkware", "Tableware", "Decor", "Tea"];
 
 export function ProductUploadWizard() {
   const [draft, setDraft] = useState<ProductDraftInput>(initialDraft);
@@ -30,6 +31,7 @@ export function ProductUploadWizard() {
   const [images, setImages] = useState<string[]>([]);
   const [agentDone, setAgentDone] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const validation = useMemo(() => productDraftSchema.safeParse(draft), [draft]);
   const issues = validation.success ? [] : validation.error.issues;
 
@@ -80,7 +82,26 @@ export function ProductUploadWizard() {
             <header><div><h2>Product details</h2><p>Review what the agent understood.</p></div><span>Draft</span></header>
             <div className="listing-fields">
               <label className="field-wide"><span>Title</span><input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="Product name" /></label>
-              <label><span>Category</span><select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value as ProductDraftInput["category"] })}>{["Drinkware", "Tableware", "Decor", "Tea"].map((item) => <option key={item}>{item}</option>)}</select></label>
+              <label><span>Category</span><div className="dark-select">
+                <button type="button" onClick={() => setCategoryOpen((value) => !value)} aria-expanded={categoryOpen} aria-haspopup="listbox">
+                  {draft.category}<ChevronDown size={16} />
+                </button>
+                {categoryOpen ? <div className="dark-select-menu" role="listbox" aria-label="Category">
+                  {productCategories.map((item) => <button
+                    className={draft.category === item ? "active" : ""}
+                    key={item}
+                    role="option"
+                    aria-selected={draft.category === item}
+                    type="button"
+                    onClick={() => {
+                      setDraft({ ...draft, category: item });
+                      setCategoryOpen(false);
+                    }}
+                  >
+                    <span>{item}</span>{draft.category === item ? <Check size={15} /> : null}
+                  </button>)}
+                </div> : null}
+              </div></label>
               <label><span>Material</span><input value={draft.material} onChange={(event) => setDraft({ ...draft, material: event.target.value })} /></label>
               <label><span>Finish</span><input value={draft.finish} onChange={(event) => setDraft({ ...draft, finish: event.target.value })} placeholder="Color or finish" /></label>
               <label><span>From · USDC</span><input type="number" value={draft.priceFrom || ""} onChange={(event) => setDraft({ ...draft, priceFrom: Number(event.target.value) })} /></label>

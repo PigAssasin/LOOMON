@@ -3,6 +3,7 @@ import { getAddress } from "viem";
 import { z } from "zod";
 import { createAdminClient } from "@/src/lib/supabase/admin";
 import { createClient } from "@/src/lib/supabase/server";
+import { requireWalletSession } from "@/src/server/auth/wallet-session";
 
 const SINGLE_DEMO_SELLER_ADDRESS = "0xd59aa8db407d4219fe4b104ca4142df14301dec4";
 
@@ -109,6 +110,9 @@ export async function GET(
     } catch {
       return NextResponse.json({ error: "Invalid wallet address" }, { status: 400 });
     }
+    if (!(await requireWalletSession(normalizedWalletAddress))) {
+      return NextResponse.json({ error: "Wallet sign-in required" }, { status: 401 });
+    }
     if (normalizedWalletAddress === SINGLE_DEMO_SELLER_ADDRESS) {
       return NextResponse.json(
         await signBriefAssetsForOrder(orderId),
@@ -128,13 +132,7 @@ export async function GET(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    if (!walletAddress || !(await walletCanAccessOrder(orderId, walletAddress))) {
-      return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
-    }
-    return NextResponse.json(
-      await signBriefAssetsForOrder(orderId),
-      { headers: { "cache-control": "no-store" } },
-    );
+    return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
   }
 
   const { data, error } = await supabase.rpc("get_order_brief_assets", {

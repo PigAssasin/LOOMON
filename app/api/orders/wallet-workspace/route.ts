@@ -7,6 +7,7 @@ import {
   emptyCommerceWorkspace,
 } from "@/src/domain/commerce-workspace";
 import { createAdminClient } from "@/src/lib/supabase/admin";
+import { requireWalletSession } from "@/src/server/auth/wallet-session";
 
 const querySchema = /^0x[0-9a-fA-F]{40}$/;
 
@@ -17,6 +18,9 @@ export async function GET(request: Request) {
   }
 
   const address = getAddress(rawAddress).toLowerCase();
+  if (!(await requireWalletSession(address))) {
+    return NextResponse.json({ error: "Wallet sign-in required" }, { status: 401 });
+  }
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("get_wallet_buyer_workspace" as never, {
     p_wallet_address: address,

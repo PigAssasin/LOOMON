@@ -5,6 +5,7 @@ import { getAddress } from "viem";
 import { z } from "zod";
 import { escrowOrderContextSchema } from "@/src/domain/escrow-order";
 import { createAdminClient } from "@/src/lib/supabase/admin";
+import { requireWalletSession } from "@/src/server/auth/wallet-session";
 
 const SINGLE_DEMO_SELLER_ADDRESS = "0xd59aa8db407d4219fe4b104ca4142df14301dec4";
 
@@ -24,6 +25,9 @@ export async function GET(request: Request) {
   const address = getAddress(query.data.address).toLowerCase();
   if (address !== SINGLE_DEMO_SELLER_ADDRESS) {
     return NextResponse.json({ error: "Seller wallet required" }, { status: 403 });
+  }
+  if (!(await requireWalletSession(address))) {
+    return NextResponse.json({ error: "Wallet sign-in required" }, { status: 401 });
   }
 
   const admin = createAdminClient();

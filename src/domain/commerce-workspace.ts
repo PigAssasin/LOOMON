@@ -117,3 +117,26 @@ export function sellingStage(item: CommerceItem) {
     ? "history"
     : "active";
 }
+
+export function statusForEscrowAction(action: string) {
+  if (action === "mark_delivered") return "seller_marked_delivered";
+  if (action === "start_production") return "in_production";
+  if (action === "confirm_completion") return "proof_minted";
+  return "refunded";
+}
+
+export function applyEscrowActionToWorkspace(
+  workspace: CommerceWorkspace,
+  orderId: string,
+  action: string,
+): CommerceWorkspace {
+  const status = statusForEscrowAction(action);
+  const update = (order: CommerceItem) =>
+    order.id === orderId ? { ...order, status } : order;
+
+  return {
+    ...workspace,
+    buyingOrders: workspace.buyingOrders.map(update),
+    sellingOrders: workspace.sellingOrders.map(update),
+  };
+}

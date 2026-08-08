@@ -1,290 +1,223 @@
 import Link from "next/link";
 import {
-  ArrowRight,
   Bot,
-  CheckCircle2,
+  Check,
+  ChevronRight,
   Coins,
+  Copy,
   Image as ImageIcon,
   LockKeyhole,
   MessageCircle,
   PackageCheck,
+  Search,
   ShieldCheck,
-  Sparkles,
   Store,
   WalletCards,
 } from "lucide-react";
-import { SiteHeader } from "@/src/components/site-header";
 
-const navItems = [
-  { href: "#vision", label: "Vision" },
-  { href: "#how-it-works", label: "How it works" },
-  { href: "#buyer", label: "Buyer flow" },
-  { href: "#seller", label: "Seller flow" },
-  { href: "#agent", label: "Personal agent" },
-  { href: "#arc", label: "Arc + Proof NFT" },
-  { href: "#data", label: "Data model" },
-  { href: "#demo", label: "Demo checklist" },
+const navGroups = [
+  {
+    title: "Introduction",
+    items: [
+      { href: "#overview", label: "What is LOOMON" },
+      { href: "#problem", label: "Problem" },
+      { href: "#demo", label: "Demo path" },
+    ],
+  },
+  {
+    title: "Product",
+    items: [
+      { href: "#buyer", label: "Buyer flow" },
+      { href: "#seller", label: "Seller flow" },
+      { href: "#chat", label: "Order chat" },
+      { href: "#agent", label: "Agent" },
+    ],
+  },
+  {
+    title: "Technology",
+    items: [
+      { href: "#arc", label: "Arc escrow" },
+      { href: "#data", label: "Supabase data" },
+      { href: "#security", label: "Security model" },
+    ],
+  },
 ];
 
 const buyerSteps = [
-  {
-    title: "Find a craft product",
-    text: "Buyers browse a focused catalog of Vietnamese ceramics and tea objects. The agent can recommend options, but the buyer chooses the final item.",
-  },
-  {
-    title: "Customize only what matters",
-    text: "Upload artwork, add printed text, describe placement, or leave everything blank and send a simple order note.",
-  },
-  {
-    title: "Preview with AI when useful",
-    text: "AI render creates three white-background product previews: 2D print, raised 3D motif, and full-surface artwork treatment.",
-  },
-  {
-    title: "Place order with wallet",
-    text: "The buyer signs the Arc payment action. The order appears in Requests until the seller accepts or rejects it.",
-  },
-  {
-    title: "Receive proof",
-    text: "When the seller marks delivery, the buyer confirms receipt and mints an NFT proof tied to the order.",
-  },
+  "Browse Vietnamese ceramic products in a visual feed.",
+  "Open a product and start a custom brief.",
+  "Add quantity, notes, artwork, text, and optional needed-by date.",
+  "Generate AI previews or send a standard reference-only brief.",
+  "Pay through the Arc escrow flow and track the order in Buying.",
+  "Confirm completion and receive the proof NFT after delivery.",
 ];
 
 const sellerSteps = [
-  {
-    title: "Incoming",
-    text: "New paid orders arrive here first. The seller reviews the custom image, notes, quantity and target date.",
-  },
-  {
-    title: "Accept or reject",
-    text: "Accept moves the order to Active. Reject sends it to History and refunds the buyer through the contract path.",
-  },
-  {
-    title: "Active production",
-    text: "The seller and buyer can chat, clarify details and share images while the order is being made.",
-  },
-  {
-    title: "Mark delivered",
-    text: "Delivery completes the seller side and unlocks the buyer proof step. The demo then shows the NFT transaction trail.",
-  },
+  "Review incoming paid orders with notes and uploaded/selected images.",
+  "Accept one order at a time or reject with refund.",
+  "Use the dock chat for buyer questions while the detail page stays focused on production.",
+  "Mark delivered, then claim after the completion and hold flow allows it.",
 ];
 
-const agentAbilities = [
-  "Read real order status and explain what stage the order is in.",
-  "Find suitable products from the catalog using natural language.",
-  "Draft seller messages, translate, summarize and remind — but waits for user approval before sending.",
-  "Prepare cancel, refund, payment or proof actions so the user can sign them from the wallet.",
-  "Never chooses the final product for the buyer and never silently sends buyer/seller messages.",
+const dataCards = [
+  { icon: PackageCheck, title: "Commerce", text: "Products, custom briefs, orders, inventory state, status history, and proof records." },
+  { icon: MessageCircle, title: "Messaging", text: "Buyer-seller order chats and personal agent conversations are stored separately." },
+  { icon: Coins, title: "Payments", text: "Arc transaction hashes, escrow instances, lifecycle projections, and proof mint attempts." },
+  { icon: LockKeyhole, title: "Privacy", text: "Server-only keys stay off the client; private order assets use signed access." },
 ];
 
-const dataBlocks = [
-  {
-    title: "Commerce records",
-    icon: PackageCheck,
-    text: "Products, variants, seller profile, stock state, uploaded assets, order code, buyer/seller wallet and lifecycle status.",
-  },
-  {
-    title: "Conversation records",
-    icon: MessageCircle,
-    text: "Personal agent threads and buyer-seller chats are separated so future agent tools can reason with the right context.",
-  },
-  {
-    title: "Onchain records",
-    icon: Coins,
-    text: "Payment, seller decisions, refund/delivery/proof events and transaction hashes are stored alongside database status.",
-  },
-  {
-    title: "Private access",
-    icon: LockKeyhole,
-    text: "Secrets stay server-side. Buyer and seller data is scoped by wallet identity and short-lived signed URLs protect order assets.",
-  },
-];
+function CodeBlock({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="gitbook-code">
+      <button type="button" aria-label="Copy command"><Copy size={15} /></button>
+      <code>{children}</code>
+    </div>
+  );
+}
 
 export default function DocsPage() {
   return (
-    <main>
-      <div className="static-header-wrap">
-        <SiteHeader />
-      </div>
+    <main className="gitbook-docs">
+      <header className="gitbook-topbar">
+        <Link className="gitbook-brand" href="/">
+          <span>LM</span>
+          <strong>LOOMON</strong>
+        </Link>
+        <label className="gitbook-search">
+          <Search size={17} />
+          <input placeholder="Search docs..." aria-label="Search docs" />
+          <kbd>Ctrl K</kbd>
+        </label>
+      </header>
 
-      <div className="docs-layout">
-        <aside className="docs-sidebar" aria-label="Documentation menu">
-          <Link className="docs-mark" href="/">
-            <span>LM</span>
-            <strong>LOOMON Docs</strong>
+      <div className="gitbook-shell">
+        <aside className="gitbook-sidebar" aria-label="Documentation navigation">
+          {navGroups.map((group) => (
+            <section key={group.title}>
+              <h2>{group.title}</h2>
+              {group.items.map((item, index) => (
+                <a className={group.title === "Introduction" && index === 0 ? "active" : ""} href={item.href} key={item.href}>
+                  <ChevronRight size={14} />
+                  {item.label}
+                </a>
+              ))}
+            </section>
+          ))}
+          <Link className="gitbook-powered" href="/app">
+            <PackageCheck size={18} /> Open live app
           </Link>
-          <nav>
-            {navItems.map((item) => (
-              <a key={item.href} href={item.href}>
-                {item.label}
-              </a>
-            ))}
-          </nav>
-          <div className="docs-sidebar-note">
-            <Sparkles size={16} />
-            <p>Demo goal: show how Arc can power a new craft-commerce experience without making users feel they are using a hard Web3 product.</p>
-          </div>
         </aside>
 
-        <article className="docs-content">
-          <section id="vision" className="docs-hero-panel">
-            <p className="bracket-label">LOOMON protocol demo</p>
-            <h1>A modern path for Vietnamese craft to travel further.</h1>
+        <article className="gitbook-content">
+          <section id="overview" className="gitbook-hero">
+            <span>Introduction</span>
+            <h1>What is LOOMON</h1>
             <p>
-              LOOMON turns a custom souvenir order into a simple, guided journey: discover a product, preview your idea, pay through Arc, chat with the maker and keep an onchain proof when the piece is delivered.
+              LOOMON is an agent-powered custom souvenir commerce demo for Vietnamese ceramic craft. Buyers discover products, customize a piece, pay through Arc, coordinate with the seller, and keep a proof NFT after delivery.
             </p>
-            <div className="docs-hero-actions">
-              <Link className="gradient-stroke-button" href="/app">
-                Open app <ArrowRight size={17} />
-              </Link>
-              <Link className="ghost-button" href="/app/orders">
-                View order flow
-              </Link>
+            <div className="gitbook-actions">
+              <Link className="gradient-stroke-button ghost-button--compact" href="/app">Open app</Link>
+              <Link className="ghost-button ghost-button--compact" href="/app/orders">Orders</Link>
             </div>
           </section>
 
-          <section id="how-it-works" className="docs-section">
-            <div className="docs-section-heading">
-              <span>01</span>
-              <div>
-                <p className="docs-kicker">The mechanism</p>
-                <h2>Web2-simple on the surface. Arc-native underneath.</h2>
-              </div>
-            </div>
-            <div className="docs-mechanism-grid">
-              <div className="docs-mechanism-card">
-                <ImageIcon size={24} />
-                <h3>Customize</h3>
-                <p>Buyer uploads an image or text. AI preview is optional, so simple orders stay simple.</p>
-              </div>
-              <div className="docs-mechanism-card">
-                <WalletCards size={24} />
-                <h3>Pay</h3>
-                <p>Wallet signing happens only at the important step: order payment, refund, delivery or proof.</p>
-              </div>
-              <div className="docs-mechanism-card">
-                <Store size={24} />
-                <h3>Produce</h3>
-                <p>Seller accepts the order, chats with the buyer and marks delivery when the piece is done.</p>
-              </div>
-              <div className="docs-mechanism-card">
-                <ShieldCheck size={24} />
-                <h3>Prove</h3>
-                <p>The delivered order can mint a proof NFT containing product, order and preview metadata.</p>
-              </div>
-            </div>
+          <section id="problem" className="gitbook-section">
+            <p className="gitbook-kicker">Why it matters</p>
+            <h2>The data bottleneck in custom craft commerce</h2>
+            <p>
+              Custom souvenir orders usually live across product cards, DMs, payment links, vague reference images, and manual status updates. LOOMON compresses that into one structured order loop that an agent can understand without hiding user control.
+            </p>
+            <div className="gitbook-callout"><ShieldCheck size={18} /> The app feels familiar, while Arc handles payment trust and verifiable milestones underneath.</div>
           </section>
 
-          <section id="buyer" className="docs-section">
-            <div className="docs-section-heading">
-              <span>02</span>
-              <div>
-                <p className="docs-kicker">For buyers</p>
-                <h2>From idea to order in one clean flow.</h2>
-              </div>
-            </div>
-            <ol className="docs-flow-list">
-              {buyerSteps.map((step) => (
-                <li key={step.title}>
-                  <h3>{step.title}</h3>
-                  <p>{step.text}</p>
-                </li>
-              ))}
+          <section id="demo" className="gitbook-section">
+            <p className="gitbook-kicker">Contributor guide</p>
+            <h2>Demo path</h2>
+            <CodeBlock>https://loomon.vercel.app/app</CodeBlock>
+            <ol className="gitbook-list">
+              <li>Open the app and browse the catalog.</li>
+              <li>Customize a product with text or uploaded artwork.</li>
+              <li>Place an Arc testnet order.</li>
+              <li>Open the seller workspace and accept only the selected incoming order.</li>
+              <li>Use the green dock chat button for buyer-seller messages.</li>
+              <li>Complete delivery and mint the proof NFT.</li>
             </ol>
           </section>
 
-          <section id="seller" className="docs-section">
-            <div className="docs-section-heading">
-              <span>03</span>
-              <div>
-                <p className="docs-kicker">For sellers</p>
-                <h2>A small workshop dashboard, not a complicated back office.</h2>
-              </div>
-            </div>
-            <div className="docs-seller-grid">
-              {sellerSteps.map((step) => (
-                <div key={step.title} className="docs-seller-card">
-                  <CheckCircle2 size={19} />
-                  <h3>{step.title}</h3>
-                  <p>{step.text}</p>
-                </div>
-              ))}
+          <section id="buyer" className="gitbook-section">
+            <p className="gitbook-kicker">Product</p>
+            <h2>Buyer flow</h2>
+            <div className="gitbook-step-list">
+              {buyerSteps.map((step) => <p key={step}><Check size={16} /> {step}</p>)}
             </div>
           </section>
 
-          <section id="agent" className="docs-section docs-feature-section">
-            <div className="docs-feature-copy">
-              <p className="docs-kicker">Personal agent</p>
-              <h2>The green button is the control room.</h2>
+          <section id="seller" className="gitbook-section">
+            <p className="gitbook-kicker">Operations</p>
+            <h2>Seller flow</h2>
+            <div className="gitbook-step-list">
+              {sellerSteps.map((step) => <p key={step}><Store size={16} /> {step}</p>)}
+            </div>
+          </section>
+
+          <section id="chat" className="gitbook-section gitbook-grid-section">
+            <div>
+              <p className="gitbook-kicker">Order chat</p>
+              <h2>Messages live in the dock, not inside the production brief</h2>
               <p>
-                The agent is not a decorative chatbot. It is designed as the layer that understands the current page, reads order data, drafts useful actions and keeps the buyer-seller process moving.
+                The order detail page is for facts: notes, uploaded artwork, selected render, quantity, due date, and timeline. The Chat button opens the green dock conversation for the buyer and seller, with history saved to Supabase.
               </p>
             </div>
-            <ul className="docs-agent-list">
-              {agentAbilities.map((ability) => (
-                <li key={ability}>
-                  <Bot size={18} />
-                  <span>{ability}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section id="arc" className="docs-section">
-            <div className="docs-section-heading">
-              <span>04</span>
-              <div>
-                <p className="docs-kicker">Arc layer</p>
-                <h2>Only the moments that need trust go onchain.</h2>
-              </div>
-            </div>
-            <div className="docs-arc-panel">
-              <div>
-                <h3>Order payment</h3>
-                <p>Buyer signs the payment transaction. LOOMON stores the order state and transaction reference.</p>
-              </div>
-              <div>
-                <h3>Seller decision</h3>
-                <p>Accept, reject and refund are tied to contract-aware status changes so both sides see the same lifecycle.</p>
-              </div>
-              <div>
-                <h3>Delivery proof</h3>
-                <p>After seller delivery and buyer receipt, the proof NFT becomes the collectible record of the completed order.</p>
-              </div>
+            <div className="gitbook-mini-panel">
+              <MessageCircle size={22} />
+              <strong>Persistent thread</strong>
+              <span>messaging.threads + messaging.messages</span>
             </div>
           </section>
 
-          <section id="data" className="docs-section">
-            <div className="docs-section-heading">
-              <span>05</span>
-              <div>
-                <p className="docs-kicker">Data foundation</p>
-                <h2>Structured from the start so the agent can grow later.</h2>
-              </div>
+          <section id="agent" className="gitbook-section gitbook-grid-section">
+            <div>
+              <p className="gitbook-kicker">Agent</p>
+              <h2>The green button is the control room</h2>
+              <p>
+                The agent reads page context, drafts messages, explains order status, guides wallet actions, and helps with product discovery. It does not silently sign, pay, or send buyer-seller messages.
+              </p>
             </div>
-            <div className="docs-data-grid">
-              {dataBlocks.map((block) => {
-                const Icon = block.icon;
-                return (
-                  <article key={block.title} className="docs-data-card">
-                    <Icon size={22} />
-                    <h3>{block.title}</h3>
-                    <p>{block.text}</p>
-                  </article>
-                );
+            <div className="gitbook-mini-panel">
+              <Bot size={22} />
+              <strong>Bounded assistant</strong>
+              <span>User-controlled final actions</span>
+            </div>
+          </section>
+
+          <section id="arc" className="gitbook-section">
+            <p className="gitbook-kicker">Technology</p>
+            <h2>Arc escrow lifecycle</h2>
+            <div className="gitbook-card-row">
+              <div><WalletCards size={20} /><strong>Fund</strong><span>Buyer places prepaid order.</span></div>
+              <div><Store size={20} /><strong>Accept</strong><span>Seller starts production.</span></div>
+              <div><ImageIcon size={20} /><strong>Deliver</strong><span>Seller marks the order delivered.</span></div>
+              <div><ShieldCheck size={20} /><strong>Prove</strong><span>Buyer confirms and proof is minted.</span></div>
+            </div>
+          </section>
+
+          <section id="data" className="gitbook-section">
+            <p className="gitbook-kicker">Technology</p>
+            <h2>Supabase data foundation</h2>
+            <div className="gitbook-data-grid">
+              {dataCards.map((card) => {
+                const Icon = card.icon;
+                return <div key={card.title}><Icon size={20} /><strong>{card.title}</strong><p>{card.text}</p></div>;
               })}
             </div>
           </section>
 
-          <section id="demo" className="docs-section docs-demo-panel">
-            <p className="docs-kicker">What to test</p>
-            <h2>Demo path for judges and first users.</h2>
-            <div className="docs-demo-checklist">
-              <p>1. Browse ceramic products and open a product detail.</p>
-              <p>2. Click Custom with agent, upload artwork or write printed text.</p>
-              <p>3. Render three previews or skip AI and place the order directly.</p>
-              <p>4. Switch to the seller wallet, accept or reject the incoming order.</p>
-              <p>5. Mark delivered, then let the buyer mint the proof NFT and open the explorer link.</p>
-            </div>
+          <section id="security" className="gitbook-section">
+            <p className="gitbook-kicker">Security</p>
+            <h2>Trust boundaries</h2>
+            <p>
+              Wallet sign-in maps an address to a Supabase identity. Server routes verify wallet/order access, private assets are signed per request, service-role keys stay server-side, and contract projections verify onchain events before changing order status.
+            </p>
           </section>
         </article>
       </div>

@@ -10,10 +10,6 @@ import {
   MessageCircle,
   PackageCheck,
   RefreshCw,
-  Send,
-  SmilePlus,
-  UploadCloud,
-  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getAddress, keccak256, toBytes } from "viem";
@@ -33,6 +29,7 @@ import {
 import { getProductBySlug } from "@/src/data/products";
 import { sessionMatchesWallet } from "@/src/features/auth/sign-in-wallet";
 import { useLoomonSession } from "@/src/features/auth/use-loomon-session";
+import { useAgent } from "@/src/features/agent/agent-provider";
 import { ARC_TESTNET } from "@/src/lib/arc";
 import { loomonEscrowPoolAbi } from "@/src/lib/payments/escrow-pool";
 
@@ -42,15 +39,6 @@ function isSingleDemoSeller(address?: string) {
   return address?.toLowerCase() === SINGLE_DEMO_SELLER_ADDRESS;
 }
 
-type ThreadMessage = {
-  id: string;
-  senderType: string;
-  body?: string | null;
-  kind: string;
-  structuredBody?: { event?: string; reason?: string } | null;
-  createdAt: string;
-  attachments?: Array<{ id: string; label?: string | null; type?: string; url?: string | null }>;
-};
 type BriefAsset = {
   id: string;
   role?: string | null;
@@ -79,16 +67,15 @@ function cleanProductTitle(item: CommerceItem) {
 
 export function OrderDetailExperience({ reference }: { reference: string }) {
   const session = useLoomonSession();
+  const { ensureSession, error: sessionError, supabase } = session;
   const { address } = useAccount();
+  const { openAgent } = useAgent();
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient({ chainId: ARC_TESTNET.id });
   const [item, setItem] = useState<CommerceItem>();
   const [escrow, setEscrow] = useState<EscrowOrderContext>();
   const [role, setRole] = useState<"buyer" | "seller">("buyer");
-  const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [briefAssets, setBriefAssets] = useState<BriefAssets>();
-  const [message, setMessage] = useState("");
-  const [messageImage, setMessageImage] = useState<File>();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -96,17 +83,21 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
   const [pageOpenedAt] = useState(Date.now);
 
   const load = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
-    if (!session.supabase) return;
+    if (!supabase) return;
     if (!silent) setLoading(true);
 
-    const { data: authData } = await session.supabase.auth.getSession();
+    const { data: authData } = await supabase.auth.getSession();
     let workspace = emptyCommerceWorkspace;
     let loadedAsDemoSeller = false;
     const demoSellerAddress = isSingleDemoSeller(address) ? address : undefined;
+    if (address && (!authData.session || !sessionMatchesWallet(authData.session, address))) {
+      await ensureSession();
+    }
+    const { data: refreshedAuthData } = await supabase.auth.getSession();
 
     if (
       demoSellerAddress
-      && (!authData.session || !sessionMatchesWallet(authData.session, address))
+      && (!refreshedAuthData.session || !sessionMatchesWallet(refreshedAuthData.session, address))
     ) {
       const response = await fetch(
         `/api/orders/demo-seller-workspace?address=${encodeURIComponent(demoSellerAddress)}`,
@@ -115,7 +106,7 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
         workspace = commerceWorkspaceSchema.parse(await response.json());
         loadedAsDemoSeller = true;
       }
-    } else if (address && (!authData.session || !sessionMatchesWallet(authData.session, address))) {
+    } else if (address && (!refreshedAuthData.session || !sessionMatchesWallet(refreshedAuthData.session, address))) {
       const response = await fetch(
         `/api/orders/wallet-workspace?address=${encodeURIComponent(address)}`,
       );
@@ -123,7 +114,7 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
         workspace = commerceWorkspaceSchema.parse(await response.json());
       }
     } else {
-      const { data, error: workspaceError } = await session.supabase.rpc("get_my_commerce_workspace");
+      const { data, error: workspaceError } = await supabase.rpc("get_my_commerce_workspace");
       if (workspaceError) {
         setError("This order could not be loaded.");
         if (!silent) setLoading(false);
@@ -150,7 +141,7 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
           ? await fetch(
             `/api/orders/wallet-escrow?address=${encodeURIComponent(address)}&orderId=${encodeURIComponent(found.id)}`,
           ).then((response) => response.ok ? response.json() : undefined)
-        : (await session.supabase.rpc(
+        : (await supabase.rpc(
           "get_order_escrow_context",
           { p_order_id: found.id },
         )).data;
@@ -165,22 +156,8 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
       setEscrow(undefined);
       setBriefAssets(undefined);
     }
-    if (found?.kind === "order" && address) {
-      const messageResponse = await fetch(
-        `/api/orders/${found.id}/messages?address=${encodeURIComponent(address)}`,
-      );
-      if (messageResponse.ok) {
-        const body = await messageResponse.json() as { messages?: ThreadMessage[] };
-        setMessages(Array.isArray(body.messages) ? body.messages : []);
-      }
-    } else if (found?.threadId) {
-      const { data: threadData } = await session.supabase.rpc("list_thread_messages", {
-        p_thread_id: found.threadId,
-      });
-      setMessages(Array.isArray(threadData) ? threadData as ThreadMessage[] : []);
-    }
     if (!silent) setLoading(false);
-  }, [address, reference, session.supabase]);
+  }, [address, ensureSession, reference, supabase]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -190,13 +167,10 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
   }, [load]);
 
   useEffect(() => {
-    if (!session.supabase || !item?.threadId) return;
-    const channel = session.supabase
+    if (!supabase || !item) return;
+    const channel = supabase
       .channel(`loomon-order-${item.id}`)
       .on("postgres_changes", { event: "*", schema: "commerce", table: "orders", filter: `id=eq.${item.id}` }, () => {
-        void load({ silent: true });
-      })
-      .on("postgres_changes", { event: "INSERT", schema: "messaging", table: "messages", filter: `thread_id=eq.${item.threadId}` }, () => {
         void load({ silent: true });
       })
       .on("postgres_changes", { event: "*", schema: "commerce", table: "order_proof_nfts", filter: `order_id=eq.${item.id}` }, () => {
@@ -204,9 +178,9 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
       })
       .subscribe();
     return () => {
-      void session.supabase?.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
-  }, [item?.id, item?.threadId, load, session.supabase]);
+  }, [item, item?.id, load, supabase]);
 
   const steps = useMemo(() => {
     if (!item) return [];
@@ -266,10 +240,10 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
   }, [item]);
 
   async function transition(action: "mark_delivered" | "confirm_received" | "report_issue" | "cancel", reason = "") {
-    if (!session.supabase || !item) return;
+    if (!supabase || !item) return;
     setBusy(true);
     setError("");
-    const { error: transitionError } = await session.supabase.rpc("transition_demo_order", {
+    const { error: transitionError } = await supabase.rpc("transition_demo_order", {
       p_order_id: item.id,
       p_action: action,
       p_reason: reason,
@@ -407,28 +381,6 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
     }
   }
 
-  async function sendMessage(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!item || !address || (!message.trim() && !messageImage)) return;
-    setBusy(true);
-    const body = new FormData();
-    body.append("address", address);
-    body.append("body", message.trim());
-    if (messageImage) body.append("image", messageImage);
-    const response = await fetch(`/api/orders/${item.id}/messages`, {
-      method: "POST",
-      body,
-    });
-    setBusy(false);
-    if (!response.ok) {
-      setError("Your message was not sent. Please try again.");
-      return;
-    }
-    setMessage("");
-    setMessageImage(undefined);
-    await load();
-  }
-
   if (loading) {
     return <OrderPageShell><div className="order-stage-empty"><RefreshCw size={22} /><div><h2>Loading order</h2><p>Checking the latest status and messages.</p></div></div></OrderPageShell>;
   }
@@ -451,7 +403,7 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
       <h1>{cleanProductTitle(item)}</h1>
       <p>{role === "buyer" ? item.makerName : item.buyerName ?? "Buyer"} · {statusLabel(item.status)}</p>
     </header>
-    {error || session.error ? <p className="form-error" role="alert">{error || session.error}</p> : null}
+    {error || sessionError ? <p className="form-error" role="alert">{error || sessionError}</p> : null}
 
     <div className="order-grid real-order-grid">
       <section>
@@ -469,6 +421,21 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
           {escrow && role === "seller" && item.status === "release_hold" ? <button className="gradient-stroke-button" disabled={busy || sellerClaimIsLocked} type="button" onClick={() => void transitionEscrow("claim")}><Check size={17} /> {sellerClaimIsLocked && sellerClaimableAt ? `Claim after ${sellerClaimableAt.toLocaleDateString()}` : "Claim USDC"}</button> : null}
           {!escrow && ["seller_accepted", "in_progress"].includes(item.status) ? <p className="order-chat-empty">This is a legacy demo order without Arc escrow. Create a new paid order to use onchain delivery, refund and proof minting.</p> : null}
           {!escrow && role === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" disabled={busy} type="button" onClick={() => void transition("confirm_received")}><Check size={17} /> Confirm received</button> : null}
+          <button
+            className="ghost-button"
+            type="button"
+            onClick={() => openAgent({
+              contextLabel: `${item.reference} · ${cleanProductTitle(item)}`,
+              orderChat: {
+                orderId: item.id,
+                orderReference: item.reference,
+                productTitle: cleanProductTitle(item),
+                counterpartyName: role === "buyer" ? item.makerName : item.buyerName ?? "Buyer",
+              },
+            })}
+          >
+            <MessageCircle size={17} /> Chat
+          </button>
         </div>
       </section>
 
@@ -488,16 +455,6 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
           </div> : <p className="order-chat-empty">No uploaded artwork. Follow the seller notes below.</p>}
           {briefAssets.makerNotes ? <p className="order-brief-notes">{briefAssets.makerNotes}</p> : null}
         </section> : null}
-        <header><MessageCircle size={20} /><div><h2>Buyer · Seller chat</h2><p>Messages stay with this order.</p></div></header>
-        <div className="order-chat-messages">
-          {messages.length ? messages.map((entry) => entry.kind === "text" ? <article className={`order-chat-message order-chat-message--${entry.senderType}`} key={entry.id}><span>{entry.senderType}</span>{entry.attachments?.map((attachment) => attachment.url ? <Image className="order-chat-image" src={attachment.url} alt={attachment.label ?? "Chat image"} width={260} height={220} unoptimized key={attachment.id} /> : null)}<p>{entry.body}</p><time>{new Date(entry.createdAt).toLocaleString()}</time></article> : <article className="order-chat-event" key={entry.id}><p>{entry.structuredBody?.event?.replaceAll("_", " ") ?? "Order updated"}</p>{entry.structuredBody?.reason ? <small>{entry.structuredBody.reason}</small> : null}</article>) : <p className="order-chat-empty">No messages yet. Start with a production or delivery question.</p>}
-        </div>
-        <form className="order-chat-form" onSubmit={sendMessage}>
-          <div className="order-chat-emoji-row" aria-label="Quick emoji">{["👍", "🙏", "✅", "📦", "✨"].map((emoji) => <button type="button" key={emoji} onClick={() => setMessage((current) => `${current}${current ? " " : ""}${emoji}`)}><SmilePlus size={14} /> {emoji}</button>)}</div>
-          {messageImage ? <div className="order-chat-image-chip"><span>{messageImage.name}</span><button type="button" onClick={() => setMessageImage(undefined)}><X size={14} /> Remove</button></div> : null}
-          <label><span className="sr-only">Message</span><textarea rows={3} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Write a message…" /></label>
-          <div className="order-chat-submit-row"><label className="order-chat-upload"><UploadCloud size={16} /> Image<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => setMessageImage(event.target.files?.[0])} /></label><button type="submit" disabled={busy || (!message.trim() && !messageImage)}><Send size={17} /> Send</button></div>
-        </form>
       </aside>
     </div>
   </OrderPageShell>;

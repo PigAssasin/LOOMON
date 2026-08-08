@@ -7,6 +7,7 @@ import {
   emptyCommerceWorkspace,
 } from "@/src/domain/commerce-workspace";
 import { createAdminClient } from "@/src/lib/supabase/admin";
+import { requireWalletSession } from "@/src/server/auth/wallet-session";
 
 const SINGLE_DEMO_SELLER_ADDRESS = "0xd59aa8db407d4219fe4b104ca4142df14301dec4";
 
@@ -25,6 +26,9 @@ export async function GET(request: Request) {
 
   if (address !== SINGLE_DEMO_SELLER_ADDRESS) {
     return NextResponse.json(emptyCommerceWorkspace);
+  }
+  if (!(await requireWalletSession(address))) {
+    return NextResponse.json({ error: "Wallet sign-in required" }, { status: 401 });
   }
 
   const admin = createAdminClient();

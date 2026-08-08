@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { getAddress } from "viem";
 import { z } from "zod";
 import { createAdminClient } from "@/src/lib/supabase/admin";
+import { requireWalletSession } from "@/src/server/auth/wallet-session";
 
 const querySchema = z.object({
   address: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
@@ -66,6 +67,9 @@ export async function GET(
   const query = querySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams.entries()));
   if (!query.success) {
     return NextResponse.json({ error: "Wallet address required." }, { status: 400 });
+  }
+  if (!(await requireWalletSession(query.data.address))) {
+    return NextResponse.json({ error: "Wallet sign-in required." }, { status: 401 });
   }
   const access = await assertOrderAccess(orderId, query.data.address);
   if (!access) return NextResponse.json({ error: "Order access required." }, { status: 403 });
@@ -143,6 +147,7 @@ export async function POST(
   const body = String(form.get("body") ?? "").trim().slice(0, 4_000);
   const file = form.get("image");
   const access = querySchema.safeParse({ address }).success
+    && await requireWalletSession(address)
     ? await assertOrderAccess(orderId, address)
     : null;
   if (!access) return NextResponse.json({ error: "Order access required." }, { status: 403 });
