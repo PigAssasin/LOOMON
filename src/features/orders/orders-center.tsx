@@ -363,6 +363,7 @@ export function OrdersCenter() {
     reason = "",
   ) {
     if (!supabase) return;
+    setBusyOrderId(item.id);
     setActionBusy(true);
     setError("");
     const { error: actionError } = await supabase.rpc("transition_quote_request", {
@@ -372,6 +373,7 @@ export function OrdersCenter() {
       p_request_key: crypto.randomUUID(),
     });
     setActionBusy(false);
+    setBusyOrderId(undefined);
     setPendingAction(undefined);
     if (actionError) {
       setError("This request changed before your action completed. Refresh and try again.");
@@ -386,8 +388,8 @@ export function OrdersCenter() {
       setError("Switch to the Lò Mây seller wallet to sign this request decision.");
       return;
     }
-    setActionBusy(true);
     setBusyOrderId(item.id);
+    setActionBusy(true);
     actionBusyRef.current = true;
     setError("");
     setActionStatus("");
@@ -447,6 +449,7 @@ export function OrdersCenter() {
     reason = "",
   ) {
     if (!supabase) return;
+    setBusyOrderId(item.id);
     setActionBusy(true);
     setError("");
     const { data, error: actionError } = await supabase.rpc("transition_demo_order", {
@@ -466,6 +469,7 @@ export function OrdersCenter() {
       }
     }
     setActionBusy(false);
+    setBusyOrderId(undefined);
     setPendingAction(undefined);
     if (actionError) {
       setError("This order changed before your action completed. Refresh and try again.");
@@ -505,8 +509,8 @@ export function OrdersCenter() {
       setError("Connect your Arc wallet before signing this order action.");
       return;
     }
-    setActionBusy(true);
     setBusyOrderId(item.id);
+    setActionBusy(true);
     actionBusyRef.current = true;
     setError("");
     setActionStatus("");
@@ -827,7 +831,7 @@ function CommerceRow({
   const router = useRouter();
   const product = getProductBySlug(item.productSlug) ?? products[0];
   const productTitle = cleanProductTitle(item);
-  const rowBusy = busy && (!busyOrderId || busyOrderId === item.id);
+  const rowBusy = busy && busyOrderId === item.id;
   const siblingBusy = busy && Boolean(busyOrderId) && busyOrderId !== item.id;
   function openDetail() {
     if (item.kind === "order") router.push(`/app/orders/${encodeURIComponent(item.id)}`);
