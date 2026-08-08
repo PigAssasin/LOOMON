@@ -1,11 +1,11 @@
 import "server-only";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { NextResponse } from "next/server";
-import { getAddress } from "viem";
 import { z } from "zod";
-import { createAdminClient } from "@/src/lib/supabase/admin";
+import {
+  assertOrderChatAccess,
+  getOrderChatThreadId,
+} from "@/src/server/commerce/order-chat-access";
 import { requireWalletSession } from "@/src/server/auth/wallet-session";
 
 const querySchema = z.object({
@@ -13,48 +13,6 @@ const querySchema = z.object({
 });
 
 const allowedImageTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
-
-async function assertOrderAccess(orderId: string, walletAddress: string) {
-  const admin = createAdminClient() as any;
-  const normalized = getAddress(walletAddress).toLowerCase();
-  const { data: escrow, error } = await admin
-    .schema("payments")
-    .from("escrow_instances")
-    .select("buyer_address, merchant_address")
-    .eq("order_id", orderId)
-    .maybeSingle();
-
-  if (error || !escrow) return null;
-  const buyer = String(escrow.buyer_address ?? "").toLowerCase();
-  const seller = String(escrow.merchant_address ?? "").toLowerCase();
-  if (normalized !== buyer && normalized !== seller) return null;
-  return { admin, role: normalized === seller ? "seller" as const : "buyer" as const };
-}
-
-async function getThreadId(orderId: string) {
-  const admin = createAdminClient() as any;
-  const { data: existing } = await admin
-    .schema("messaging")
-    .from("threads")
-    .select("id")
-    .eq("order_id", orderId)
-    .maybeSingle();
-  if (existing?.id) return String(existing.id);
-
-  const { data, error } = await admin
-    .schema("messaging")
-    .from("threads")
-    .insert({
-      thread_type: "buyer_seller",
-      order_id: orderId,
-      title: "Order chat",
-      status: "open",
-    })
-    .select("id")
-    .single();
-  if (error) throw error;
-  return String(data.id);
-}
 
 export async function GET(
   request: Request,
@@ -71,10 +29,10 @@ export async function GET(
   if (!(await requireWalletSession(query.data.address))) {
     return NextResponse.json({ error: "Wallet sign-in required." }, { status: 401 });
   }
-  const access = await assertOrderAccess(orderId, query.data.address);
+  const access = await assertOrderChatAccess(orderId, query.data.address);
   if (!access) return NextResponse.json({ error: "Order access required." }, { status: 403 });
 
-  const threadId = await getThreadId(orderId);
+  const threadId = await getOrderChatThreadId(orderId);
   const { data: messages, error } = await access.admin
     .schema("messaging")
     .from("messages")
@@ -148,7 +106,7 @@ export async function POST(
   const file = form.get("image");
   const access = querySchema.safeParse({ address }).success
     && await requireWalletSession(address)
-    ? await assertOrderAccess(orderId, address)
+    ? await assertOrderChatAccess(orderId, address)
     : null;
   if (!access) return NextResponse.json({ error: "Order access required." }, { status: 403 });
   if (!body && !(file instanceof File)) {
@@ -158,7 +116,7 @@ export async function POST(
     return NextResponse.json({ error: "Image must be PNG, JPG, WebP or GIF under 5 MB." }, { status: 400 });
   }
 
-  const threadId = await getThreadId(orderId);
+  const threadId = await getOrderChatThreadId(orderId);
   const { data: message, error: messageError } = await access.admin
     .schema("messaging")
     .from("messages")

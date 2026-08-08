@@ -176,6 +176,7 @@ export function AgentPanel({
   const chatEndRef = useRef<HTMLDivElement>(null);
   const orderChatChannelRef = useRef<OrderChatChannel | null>(null);
   const orderChatClientId = useRef(id("order-chat-client"));
+  const orderChatCursorRef = useRef("");
   const effectiveContext = useMemo<AgentPageContext>(() => ({
     ...pageContext,
     label: contextLabel ?? pageContext.label,
@@ -303,12 +304,13 @@ export function AgentPanel({
       setOrderChatRole(payload.role);
       setOrderChatThreadId(payload.threadId ?? "");
       setOrderMessages(messages);
+      const newest = messages.at(-1);
+      orderChatCursorRef.current = newest ? `${newest.createdAt}:${newest.id}` : "empty";
       const readKey = `loomon-order-chat-read-${chat.orderId}-${address.toLowerCase()}`;
       const lastRead = Number(localStorage.getItem(readKey) ?? 0);
       setOrderUnreadCount(messages.filter((message) =>
         message.senderType !== payload.role && new Date(message.createdAt).getTime() > lastRead,
       ).length);
-      const newest = messages.at(-1);
       if (newest) localStorage.setItem(readKey, String(new Date(newest.createdAt).getTime()));
     } catch (cause) {
       setOrderChatError(cause instanceof Error ? cause.message : "Order chat could not be loaded.");
@@ -354,6 +356,30 @@ export function AgentPanel({
     // loadOrderChat intentionally reads the latest wallet and state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOrderChat?.orderId, open, orderChatThreadId, supabase]);
+
+  useEffect(() => {
+    if (!open || !activeOrderChat || !address) return;
+    const source = new EventSource(
+      `/api/orders/${activeOrderChat.orderId}/messages/stream?address=${encodeURIComponent(address)}`,
+    );
+    source.addEventListener("ready", (event) => {
+      const payload = JSON.parse((event as MessageEvent).data) as { cursor?: string };
+      if (payload.cursor) orderChatCursorRef.current = payload.cursor;
+    });
+    source.addEventListener("changed", (event) => {
+      const payload = JSON.parse((event as MessageEvent).data) as { cursor?: string };
+      if (payload.cursor && payload.cursor !== orderChatCursorRef.current) {
+        orderChatCursorRef.current = payload.cursor;
+        void loadOrderChat(activeOrderChat);
+      }
+    });
+    source.onerror = () => {
+      source.close();
+    };
+    return () => source.close();
+    // loadOrderChat intentionally reads the latest wallet and state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOrderChat?.orderId, address, open]);
 
   async function sendOrderMessage() {
     if (!activeOrderChat || !address || (!orderMessageInput.trim() && !orderMessageImage)) return;
