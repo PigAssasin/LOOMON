@@ -140,3 +140,29 @@ export function applyEscrowActionToWorkspace(
     sellingOrders: workspace.sellingOrders.map(update),
   };
 }
+
+function mergeItems(left: CommerceItem[], right: CommerceItem[]) {
+  const byKey = new Map<string, CommerceItem>();
+  for (const item of [...left, ...right]) {
+    const key = `${item.kind}:${item.id}`;
+    const current = byKey.get(key);
+    if (!current || Date.parse(item.updatedAt) >= Date.parse(current.updatedAt)) {
+      byKey.set(key, item);
+    }
+  }
+  return [...byKey.values()].sort(
+    (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
+  );
+}
+
+export function mergeCommerceWorkspaces(
+  primary: CommerceWorkspace,
+  secondary: CommerceWorkspace,
+): CommerceWorkspace {
+  return {
+    buyingRequests: mergeItems(primary.buyingRequests, secondary.buyingRequests),
+    sellingRequests: mergeItems(primary.sellingRequests, secondary.sellingRequests),
+    buyingOrders: mergeItems(primary.buyingOrders, secondary.buyingOrders),
+    sellingOrders: mergeItems(primary.sellingOrders, secondary.sellingOrders),
+  };
+}

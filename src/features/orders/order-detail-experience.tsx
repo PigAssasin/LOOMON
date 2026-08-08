@@ -18,6 +18,7 @@ import { SiteHeader } from "@/src/components/site-header";
 import {
   commerceWorkspaceSchema,
   emptyCommerceWorkspace,
+  mergeCommerceWorkspaces,
   statusLabel,
   type CommerceItem,
 } from "@/src/domain/commerce-workspace";
@@ -121,6 +122,18 @@ export function OrderDetailExperience({ reference }: { reference: string }) {
         return;
       }
       workspace = commerceWorkspaceSchema.parse(data ?? emptyCommerceWorkspace);
+    }
+    if (address) {
+      const walletWorkspaceResponse = isSingleDemoSeller(address)
+        ? await fetch(`/api/orders/demo-seller-workspace?address=${encodeURIComponent(address)}`)
+        : await fetch(`/api/orders/wallet-workspace?address=${encodeURIComponent(address)}`);
+      if (walletWorkspaceResponse.ok) {
+        workspace = mergeCommerceWorkspaces(
+          workspace,
+          commerceWorkspaceSchema.parse(await walletWorkspaceResponse.json()),
+        );
+        loadedAsDemoSeller = loadedAsDemoSeller || isSingleDemoSeller(address);
+      }
     }
 
     const buyerItem = workspace.buyingOrders.find((order) =>

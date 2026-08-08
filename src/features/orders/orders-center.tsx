@@ -22,6 +22,7 @@ import {
   applyEscrowActionToWorkspace,
   commerceWorkspaceSchema,
   emptyCommerceWorkspace,
+  mergeCommerceWorkspaces,
   sellingStage,
   statusLabel,
   type CommerceItem,
@@ -180,7 +181,8 @@ export function OrdersCenter() {
     }
 
     if (!currentSession) {
-      if (!(await loadSingleDemoSellerWorkspace()) && !(await loadWalletBuyerWorkspace())) {
+      const loadedWalletWorkspace = await loadSingleDemoSellerWorkspace() || await loadWalletBuyerWorkspace();
+      if (!loadedWalletWorkspace) {
         setWorkspace(emptyCommerceWorkspace);
       }
       if (!silent) setLoading(false);
@@ -206,11 +208,23 @@ export function OrdersCenter() {
       supabase.rpc("get_my_commerce_workspace"),
       supabase.rpc("list_claimable_demo_makers"),
     ]);
+    let nextWorkspace = emptyCommerceWorkspace;
     if (workspaceError) {
       setError("Your orders could not be loaded. Please try again.");
     } else {
-      setWorkspace(commerceWorkspaceSchema.parse(data));
+      nextWorkspace = commerceWorkspaceSchema.parse(data);
     }
+
+    if (address) {
+      const walletWorkspaceResponse = isSingleDemoSeller(address)
+        ? await fetch(`/api/orders/demo-seller-workspace?address=${encodeURIComponent(address)}`)
+        : await fetch(`/api/orders/wallet-workspace?address=${encodeURIComponent(address)}`);
+      if (walletWorkspaceResponse.ok) {
+        const walletWorkspace = commerceWorkspaceSchema.parse(await walletWorkspaceResponse.json());
+        nextWorkspace = mergeCommerceWorkspaces(nextWorkspace, walletWorkspace);
+      }
+    }
+    setWorkspace(nextWorkspace);
     const proofUrl = address
       ? `/api/purchases/proofs?address=${encodeURIComponent(address)}`
       : "/api/purchases/proofs";
@@ -422,6 +436,7 @@ export function OrdersCenter() {
     } finally {
       actionBusyRef.current = false;
       setActionBusy(false);
+      setBusyOrderId(undefined);
       window.setTimeout(() => setActionStatus(""), 3500);
     }
   }
@@ -485,11 +500,13 @@ export function OrdersCenter() {
     item: CommerceItem,
     action: Extract<EscrowAction, "start_production" | "mark_delivered" | "confirm_completion" | "cancel" | "refund">,
   ) {
+    if (actionBusyRef.current) return;
     if (!address) {
       setError("Connect your Arc wallet before signing this order action.");
       return;
     }
     setActionBusy(true);
+    setBusyOrderId(item.id);
     actionBusyRef.current = true;
     setError("");
     setActionStatus("");
@@ -839,19 +856,19 @@ function CommerceRow({
       </dl>
     </div>
     <div className="order-row-actions" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
-      {item.kind === "request" && mode === "buyer" && ["submitted", "seller_review", "changes_requested"].includes(item.status) ? <button type="button" onClick={() => onRequestAction(item, "withdraw")} disabled={busy}>Withdraw</button> : null}
+      {item.kind === "request" && mode === "buyer" && ["submitted", "seller_review", "changes_requested"].includes(item.status) ? <button type="button" onClick={() => onRequestAction(item, "withdraw")} disabled={rowBusy || siblingBusy}>Withdraw</button> : null}
       {item.kind === "request" && mode === "seller" && ["submitted", "seller_review", "changes_requested"].includes(item.status) ? <>
-        <button className="gradient-stroke-button" type="button" onClick={() => onRequestAction(item, "accept")} disabled={busy}>Accept</button>
-        <button type="button" onClick={() => onRequestAction(item, "reject")} disabled={busy}>Reject</button>
+        <button className="gradient-stroke-button" type="button" onClick={() => onRequestAction(item, "accept")} disabled={rowBusy || siblingBusy}>{rowBusy ? "Accepting..." : "Accept"}</button>
+        <button type="button" onClick={() => onRequestAction(item, "reject")} disabled={rowBusy || siblingBusy}>{rowBusy ? "Rejecting..." : "Reject"}</button>
       </> : null}
       {item.kind === "order" && mode === "seller" && item.status === "escrow_funded" ? <>
-        <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "start_production")} disabled={busy}>{rowBusy ? "Accepting..." : "Accept"}</button>
-        <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={busy}>{rowBusy ? "Working..." : "Reject + refund"}</button>
+        <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "start_production")} disabled={rowBusy || siblingBusy}>{rowBusy ? "Accepting..." : "Accept"}</button>
+        <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={rowBusy || siblingBusy}>{rowBusy ? "Working..." : "Reject + refund"}</button>
       </> : null}
-      {item.kind === "order" && mode === "seller" && item.status === "in_production" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "mark_delivered")} disabled={busy}><PackageCheck size={16} /> {rowBusy ? "Marking..." : "Mark delivered"}</button> : null}
-      {item.kind === "order" && mode === "seller" && item.status === "in_production" ? <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={busy}>{rowBusy ? "Working..." : "Cancel/refund"}</button> : null}
-      {item.kind === "order" && mode === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "confirm_completion")} disabled={busy}><Check size={16} /> {rowBusy ? "Minting..." : "Mint NFT"}</button> : null}
-      {item.kind === "order" && mode === "buyer" && item.status === "escrow_funded" ? <button type="button" onClick={() => onOrderAction(item, "cancel")} disabled={busy}>{rowBusy ? "Cancelling..." : "Cancel + refund"}</button> : null}
+      {item.kind === "order" && mode === "seller" && item.status === "in_production" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "mark_delivered")} disabled={rowBusy || siblingBusy}><PackageCheck size={16} /> {rowBusy ? "Marking..." : "Mark delivered"}</button> : null}
+      {item.kind === "order" && mode === "seller" && item.status === "in_production" ? <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={rowBusy || siblingBusy}>{rowBusy ? "Working..." : "Cancel/refund"}</button> : null}
+      {item.kind === "order" && mode === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "confirm_completion")} disabled={rowBusy || siblingBusy}><Check size={16} /> {rowBusy ? "Minting..." : "Mint NFT"}</button> : null}
+      {item.kind === "order" && mode === "buyer" && item.status === "escrow_funded" ? <button type="button" onClick={() => onOrderAction(item, "cancel")} disabled={rowBusy || siblingBusy}>{rowBusy ? "Cancelling..." : "Cancel + refund"}</button> : null}
       {siblingBusy ? <span className="orders-wallet-pill">Another order is signing</span> : null}
       {item.kind === "order" && ["seller_accepted", "in_progress"].includes(item.status) ? <span className="orders-wallet-pill">Legacy · no escrow</span> : null}
       {item.kind === "order" ? <button className="order-message-button" type="button" onClick={onOpenMessage}><MessageCircle size={16} /> Message</button> : null}

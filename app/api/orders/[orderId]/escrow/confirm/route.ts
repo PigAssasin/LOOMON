@@ -15,6 +15,7 @@ import { arcTestnet } from "@/src/lib/chains";
 import { loomonEscrowPoolAbi } from "@/src/lib/payments/escrow-pool";
 import { mintOrderProofsForParticipants } from "@/src/server/commerce/order-proof-service";
 import { createAdminClient } from "@/src/lib/supabase/admin";
+import { requireWalletSession } from "@/src/server/auth/wallet-session";
 import type { Json } from "@/src/lib/supabase/database.types";
 
 const eventByAction: Record<EscrowAction, string> = {
@@ -67,19 +68,23 @@ export async function POST(
       : input.data.action === "dispute"
         ? null
         : "seller";
-  const admin = createAdminClient();
   const walletAddress = input.data.walletAddress;
-  const { data: rawContext, error: contextError } = walletAddress
-    ? await admin.rpc("get_wallet_order_escrow_context" as never, {
+  if (!walletAddress) {
+    return NextResponse.json({ error: "Wallet address required" }, { status: 400 });
+  }
+  const session = await requireWalletSession(walletAddress);
+  if (!session) {
+    return NextResponse.json({ error: "Wallet sign-in required" }, { status: 401 });
+  }
+
+  const admin = createAdminClient();
+  const { data: rawContext, error: contextError } = await admin.rpc(
+    "get_wallet_order_escrow_context" as never,
+    {
       p_order_id: orderId,
-      p_wallet_address: walletAddress.toLowerCase(),
-    } as never)
-    : expectedRole
-      ? await admin.rpc("get_order_escrow_context_for_projection" as never, {
-        p_order_id: orderId,
-        p_role: expectedRole,
-      } as never)
-      : { data: null, error: { message: "Wallet address required" } };
+      p_wallet_address: session.address,
+    } as never,
+  );
   if (contextError || !rawContext) {
     return NextResponse.json(
       { error: "Order escrow not found for this wallet" },
