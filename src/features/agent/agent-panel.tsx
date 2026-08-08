@@ -37,6 +37,9 @@ type OrderChatEntry = {
   createdAt: string;
   attachments?: Array<{ id: string; label: string | null; type: string; url: string | null }>;
 };
+type OrderChatChannel = {
+  send: (args: { type: "broadcast"; event: string; payload: Record<string, unknown> }) => Promise<unknown>;
+};
 
 const THREADS_KEY = "loomon-agent-threads-v2";
 const ACTIVE_THREAD_KEY = "loomon-agent-active-thread-v2";
@@ -153,7 +156,7 @@ export function AgentPanel({
   requestId?: number;
   pageContext: AgentPageContext;
 }) {
-  const { address } = useLoomonSession();
+  const { address, supabase } = useLoomonSession();
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [activeId, setActiveId] = useState("");
   const [hydrated, setHydrated] = useState(false);
@@ -168,8 +171,11 @@ export function AgentPanel({
   const [orderChatLoading, setOrderChatLoading] = useState(false);
   const [orderChatError, setOrderChatError] = useState("");
   const [orderUnreadCount, setOrderUnreadCount] = useState(0);
+  const [orderChatThreadId, setOrderChatThreadId] = useState("");
   const processedRequest = useRef<number | undefined>(undefined);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const orderChatChannelRef = useRef<OrderChatChannel | null>(null);
+  const orderChatClientId = useRef(id("order-chat-client"));
   const effectiveContext = useMemo<AgentPageContext>(() => ({
     ...pageContext,
     label: contextLabel ?? pageContext.label,
@@ -291,10 +297,11 @@ export function AgentPanel({
     setOrderChatError("");
     try {
       const response = await fetch(`/api/orders/${chat.orderId}/messages?address=${encodeURIComponent(address)}`);
-      const payload = await response.json() as { role?: string; messages?: OrderChatEntry[]; error?: string };
+      const payload = await response.json() as { role?: string; threadId?: string; messages?: OrderChatEntry[]; error?: string };
       if (!response.ok) throw new Error(payload.error ?? "Order chat could not be loaded.");
       const messages = payload.messages ?? [];
       setOrderChatRole(payload.role);
+      setOrderChatThreadId(payload.threadId ?? "");
       setOrderMessages(messages);
       const readKey = `loomon-order-chat-read-${chat.orderId}-${address.toLowerCase()}`;
       const lastRead = Number(localStorage.getItem(readKey) ?? 0);
@@ -313,13 +320,40 @@ export function AgentPanel({
   useEffect(() => {
     if (!open || !activeOrderChat) return;
     const initial = window.setTimeout(() => void loadOrderChat(activeOrderChat), 0);
-    const interval = window.setInterval(() => void loadOrderChat(activeOrderChat), 12_000);
+    const interval = window.setInterval(() => void loadOrderChat(activeOrderChat), 30_000);
     return () => {
       window.clearTimeout(initial);
       window.clearInterval(interval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOrderChat?.orderId, address, open]);
+
+  useEffect(() => {
+    if (!open || !activeOrderChat || !supabase) return;
+    const channel = supabase
+      .channel(`loomon-order-chat-${activeOrderChat.orderId}`)
+      .on("broadcast", { event: "message_sent" }, (event) => {
+        if (event.payload?.senderClientId === orderChatClientId.current) return;
+        void loadOrderChat(activeOrderChat);
+      })
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "messaging", table: "messages" },
+        (event) => {
+          if (orderChatThreadId && String(event.new?.thread_id ?? "") === orderChatThreadId) {
+            void loadOrderChat(activeOrderChat);
+          }
+        },
+      )
+      .subscribe();
+    orderChatChannelRef.current = channel as OrderChatChannel;
+    return () => {
+      if (orderChatChannelRef.current === channel) orderChatChannelRef.current = null;
+      void supabase.removeChannel(channel);
+    };
+    // loadOrderChat intentionally reads the latest wallet and state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOrderChat?.orderId, open, orderChatThreadId, supabase]);
 
   async function sendOrderMessage() {
     if (!activeOrderChat || !address || (!orderMessageInput.trim() && !orderMessageImage)) return;
@@ -339,6 +373,16 @@ export function AgentPanel({
       setOrderMessageInput("");
       setOrderMessageImage(undefined);
       await loadOrderChat(activeOrderChat);
+      await orderChatChannelRef.current?.send({
+        type: "broadcast",
+        event: "message_sent",
+        payload: {
+          orderId: activeOrderChat.orderId,
+          senderAddress: address,
+          senderClientId: orderChatClientId.current,
+          sentAt: new Date().toISOString(),
+        },
+      });
     } catch (cause) {
       setOrderChatError(cause instanceof Error ? cause.message : "Message could not be sent.");
     } finally {
