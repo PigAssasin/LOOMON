@@ -55,6 +55,10 @@ type PendingAction = {
   action: "reject" | "request_changes" | "withdraw" | "cancel";
 };
 type OrderAssetPreview = { url: string; label: string };
+type BusyOrderAction = {
+  action: string;
+  orderId: string;
+};
 
 const SINGLE_DEMO_SELLER_ADDRESS = "0xd59aa8db407d4219fe4b104ca4142df14301dec4";
 
@@ -126,7 +130,7 @@ export function OrdersCenter() {
   const [error, setError] = useState("");
   const [pendingAction, setPendingAction] = useState<PendingAction>();
   const [actionBusy, setActionBusy] = useState(false);
-  const [busyOrderId, setBusyOrderId] = useState<string>();
+  const [busyOrderAction, setBusyOrderAction] = useState<BusyOrderAction>();
   const setActionStatus = useCallback((message?: string) => {
     void message;
   }, []);
@@ -364,7 +368,7 @@ export function OrdersCenter() {
   ) {
     if (actionBusyRef.current) return;
     if (!supabase) return;
-    setBusyOrderId(item.id);
+    setBusyOrderAction({ action, orderId: item.id });
     setActionBusy(true);
     actionBusyRef.current = true;
     setError("");
@@ -385,7 +389,7 @@ export function OrdersCenter() {
     } finally {
       actionBusyRef.current = false;
       setActionBusy(false);
-      setBusyOrderId(undefined);
+      setBusyOrderAction(undefined);
     }
   }
 
@@ -395,7 +399,7 @@ export function OrdersCenter() {
       setError("Switch to the Lò Mây seller wallet to sign this request decision.");
       return;
     }
-    setBusyOrderId(item.id);
+    setBusyOrderAction({ action, orderId: item.id });
     setActionBusy(true);
     actionBusyRef.current = true;
     setError("");
@@ -445,7 +449,7 @@ export function OrdersCenter() {
     } finally {
       actionBusyRef.current = false;
       setActionBusy(false);
-      setBusyOrderId(undefined);
+      setBusyOrderAction(undefined);
       window.setTimeout(() => setActionStatus(""), 3500);
     }
   }
@@ -457,7 +461,7 @@ export function OrdersCenter() {
   ) {
     if (actionBusyRef.current) return;
     if (!supabase) return;
-    setBusyOrderId(item.id);
+    setBusyOrderAction({ action, orderId: item.id });
     setActionBusy(true);
     actionBusyRef.current = true;
     setError("");
@@ -487,7 +491,7 @@ export function OrdersCenter() {
     } finally {
       actionBusyRef.current = false;
       setActionBusy(false);
-      setBusyOrderId(undefined);
+      setBusyOrderAction(undefined);
     }
   }
 
@@ -522,7 +526,7 @@ export function OrdersCenter() {
       setError("Connect your Arc wallet before signing this order action.");
       return;
     }
-    setBusyOrderId(item.id);
+    setBusyOrderAction({ action, orderId: item.id });
     setActionBusy(true);
     actionBusyRef.current = true;
     setError("");
@@ -648,7 +652,7 @@ export function OrdersCenter() {
     } finally {
       actionBusyRef.current = false;
       setActionBusy(false);
-      setBusyOrderId(undefined);
+      setBusyOrderAction(undefined);
       window.setTimeout(() => setActionStatus(""), 4500);
     }
   }
@@ -703,7 +707,7 @@ export function OrdersCenter() {
               proofsByOrderId={proofsByOrderId}
               orderAssetsById={orderAssetsById}
               busy={actionBusy}
-              busyOrderId={busyOrderId}
+              busyOrderAction={busyOrderAction}
             onRequestAction={(item, action) => {
               if (action === "withdraw") setPendingAction({ item, action });
             }}
@@ -729,7 +733,7 @@ export function OrdersCenter() {
               proofsByOrderId={proofsByOrderId}
               orderAssetsById={orderAssetsById}
               busy={actionBusy}
-              busyOrderId={busyOrderId}
+              busyOrderAction={busyOrderAction}
               onRequestAction={(item, action) => {
                 if (action === "accept" || action === "reject") void transitionRequestOnchain(item, action);
                 else setPendingAction({ item, action });
@@ -777,7 +781,7 @@ function CommerceList({
   proofsByOrderId,
   orderAssetsById,
   busy,
-  busyOrderId,
+  busyOrderAction,
   onRequestAction,
   onOrderAction,
 }: {
@@ -787,7 +791,7 @@ function CommerceList({
   proofsByOrderId: Record<string, OrderProofRecord>;
   orderAssetsById: Record<string, OrderAssetPreview>;
   busy: boolean;
-  busyOrderId?: string;
+  busyOrderAction?: BusyOrderAction;
   onRequestAction: (item: CommerceItem, action: "accept" | "reject" | "request_changes" | "withdraw") => void;
   onOrderAction: (item: CommerceItem, action: "start_production" | "mark_delivered" | "confirm_completion" | "cancel" | "refund") => void;
 }) {
@@ -806,7 +810,7 @@ function CommerceList({
         mode={mode}
         asset={orderAssetsById[item.id]}
         busy={busy}
-        busyOrderId={busyOrderId}
+        busyOrderAction={busyOrderAction}
         onRequestAction={onRequestAction}
         onOrderAction={onOrderAction}
         onOpenMessage={() => openAgent({
@@ -827,7 +831,7 @@ function CommerceRow({
   mode,
   asset,
   busy,
-  busyOrderId,
+  busyOrderAction,
   onRequestAction,
   onOrderAction,
   onOpenMessage,
@@ -836,7 +840,7 @@ function CommerceRow({
   mode: OrderMode;
   asset?: OrderAssetPreview;
   busy: boolean;
-  busyOrderId?: string;
+  busyOrderAction?: BusyOrderAction;
   onRequestAction: (item: CommerceItem, action: "accept" | "reject" | "request_changes" | "withdraw") => void;
   onOrderAction: (item: CommerceItem, action: "start_production" | "mark_delivered" | "confirm_completion" | "cancel" | "refund") => void;
   onOpenMessage: () => void;
@@ -844,7 +848,8 @@ function CommerceRow({
   const router = useRouter();
   const product = getProductBySlug(item.productSlug) ?? products[0];
   const productTitle = cleanProductTitle(item);
-  const rowBusy = busy && busyOrderId === item.id;
+  const rowBusy = busy && busyOrderAction?.orderId === item.id;
+  const actionBusy = (action: string) => rowBusy && busyOrderAction?.action === action;
   function openDetail() {
     if (item.kind === "order") router.push(`/app/orders/${encodeURIComponent(item.id)}`);
   }
@@ -874,17 +879,17 @@ function CommerceRow({
     <div className="order-row-actions" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
       {item.kind === "request" && mode === "buyer" && ["submitted", "seller_review", "changes_requested"].includes(item.status) ? <button type="button" onClick={() => onRequestAction(item, "withdraw")} disabled={rowBusy}>Withdraw</button> : null}
       {item.kind === "request" && mode === "seller" && ["submitted", "seller_review", "changes_requested"].includes(item.status) ? <>
-        <button className="gradient-stroke-button" type="button" onClick={() => onRequestAction(item, "accept")} disabled={rowBusy}>{rowBusy ? "Accepting..." : "Accept"}</button>
-        <button type="button" onClick={() => onRequestAction(item, "reject")} disabled={rowBusy}>{rowBusy ? "Rejecting..." : "Reject"}</button>
+        <button className="gradient-stroke-button" type="button" onClick={() => onRequestAction(item, "accept")} disabled={rowBusy}>{actionBusy("accept") ? "Accepting..." : "Accept"}</button>
+        <button type="button" onClick={() => onRequestAction(item, "reject")} disabled={rowBusy}>{actionBusy("reject") ? "Rejecting..." : "Reject"}</button>
       </> : null}
       {item.kind === "order" && mode === "seller" && item.status === "escrow_funded" ? <>
-        <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "start_production")} disabled={rowBusy}>{rowBusy ? "Accepting..." : "Accept"}</button>
-        <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={rowBusy}>{rowBusy ? "Working..." : "Reject + refund"}</button>
+        <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "start_production")} disabled={rowBusy}>{actionBusy("start_production") ? "Accepting..." : "Accept"}</button>
+        <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={rowBusy}>{actionBusy("refund") ? "Working..." : "Reject + refund"}</button>
       </> : null}
-      {item.kind === "order" && mode === "seller" && item.status === "in_production" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "mark_delivered")} disabled={rowBusy}><PackageCheck size={16} /> {rowBusy ? "Marking..." : "Mark delivered"}</button> : null}
-      {item.kind === "order" && mode === "seller" && item.status === "in_production" ? <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={rowBusy}>{rowBusy ? "Working..." : "Cancel/refund"}</button> : null}
-      {item.kind === "order" && mode === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "confirm_completion")} disabled={rowBusy}><Check size={16} /> {rowBusy ? "Minting..." : "Mint NFT"}</button> : null}
-      {item.kind === "order" && mode === "buyer" && item.status === "escrow_funded" ? <button type="button" onClick={() => onOrderAction(item, "cancel")} disabled={rowBusy}>{rowBusy ? "Cancelling..." : "Cancel + refund"}</button> : null}
+      {item.kind === "order" && mode === "seller" && item.status === "in_production" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "mark_delivered")} disabled={rowBusy}><PackageCheck size={16} /> {actionBusy("mark_delivered") ? "Marking..." : "Mark delivered"}</button> : null}
+      {item.kind === "order" && mode === "seller" && item.status === "in_production" ? <button type="button" onClick={() => onOrderAction(item, "refund")} disabled={rowBusy}>{actionBusy("refund") ? "Working..." : "Cancel/refund"}</button> : null}
+      {item.kind === "order" && mode === "buyer" && item.status === "seller_marked_delivered" ? <button className="gradient-stroke-button" type="button" onClick={() => onOrderAction(item, "confirm_completion")} disabled={rowBusy}><Check size={16} /> {actionBusy("confirm_completion") ? "Minting..." : "Mint NFT"}</button> : null}
+      {item.kind === "order" && mode === "buyer" && item.status === "escrow_funded" ? <button type="button" onClick={() => onOrderAction(item, "cancel")} disabled={rowBusy}>{actionBusy("cancel") ? "Cancelling..." : "Cancel + refund"}</button> : null}
       {item.kind === "order" && ["seller_accepted", "in_progress"].includes(item.status) ? <span className="orders-wallet-pill">Legacy · no escrow</span> : null}
       {item.kind === "order" ? <button className="order-message-button" type="button" onClick={onOpenMessage}><MessageCircle size={16} /> Message</button> : null}
     </div>
