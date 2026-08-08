@@ -14,6 +14,7 @@ import {
   type CustomizationSession,
 } from "@/src/features/customization/customization-storage";
 import { useOrderRequestSubmission } from "@/src/features/quote/use-order-request-submission";
+import { useLoomonSession } from "@/src/features/auth/use-loomon-session";
 import { formatMoney } from "@/src/lib/money";
 
 function tomorrow() {
@@ -56,6 +57,7 @@ export function ProductCustomizationStudio({
   const [sourceUrl, setSourceUrl] = useState("");
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
   const order = useOrderRequestSubmission({ product, session });
+  const authSession = useLoomonSession();
 
   const persist = useCallback((next: CustomizationSession) => {
     setSession(next);
@@ -81,6 +83,9 @@ export function ProductCustomizationStudio({
     };
     persist(rendering);
     try {
+      if (!(await authSession.ensureSession())) {
+        throw new Error("Wallet sign-in required before rendering.");
+      }
       const body = new FormData();
       const productImage = await createProductReference(product);
       body.append("productImage", productImage, `${product.slug}-reference.png`);
@@ -98,7 +103,7 @@ export function ProductCustomizationStudio({
     } catch {
       persist({ ...rendering, status: "error", updatedAt: Date.now() });
     }
-  }, [persist, product]);
+  }, [authSession, persist, product]);
 
   useEffect(() => {
     let active = true;

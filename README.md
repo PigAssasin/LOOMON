@@ -1,6 +1,6 @@
 # LOOMON
 
-LOOMON is a custom souvenir commerce demo for Vietnamese ceramic craft, powered by an app-native agent and settled through Arc.
+LOOMON is a custom souvenir commerce demo for Vietnamese ceramic craft, powered by an app-native agent and settled through Arc Testnet.
 
 It starts like a simple Web2 shopping experience: browse beautiful products, choose a piece, upload artwork or text, preview the custom result, and place an order. Behind that calm surface, LOOMON uses wallets, Arc escrow, seller actions, order chat, and proof NFTs to show how traditional craft can move into a more trusted digital commerce flow.
 
@@ -8,7 +8,20 @@ Live demo:
 
 - [Landing page](https://loomon.vercel.app)
 - [App](https://loomon.vercel.app/app)
-- [Docs](https://loomon.vercel.app/docs)
+- [Docs](https://loomon.vercel.app/app/docs)
+
+## Quick architecture
+
+```text
+Buyer wallet
+  -> Next.js app
+  -> Supabase wallet session
+  -> Custom brief + checkout session
+  -> Arc escrow transaction
+  -> Server receipt/event verification
+  -> Supabase order projection
+  -> Seller actions + order chat + proof record
+```
 
 ## Why LOOMON exists
 
@@ -73,6 +86,20 @@ LOOMON uses Arc to demonstrate a trust layer for custom commerce:
 - Supabase keeps the app data: products, profiles, chat, custom briefs, and order projections.
 
 In plain language: the app feels simple, while Arc records the important commerce milestones.
+
+## Arc Testnet contract registry
+
+Public testnet addresses used by the demo:
+
+| Component | Address / config | Purpose |
+| --- | --- | --- |
+| Arc Testnet | `chainId 5042002` | Target network for wallet actions |
+| Arc native USDC | `0x3600000000000000000000000000000000000000` | Payment asset |
+| `LoomonNativeEscrowPool` | `0x95d242919da239859ca7ab8eddc77ae5b4f450db` | Active prepaid order escrow |
+| `LoomonQuoteDecision` | `0x0af0d368ed7a742f623103FDf9e43a193f330380` | Demo seller accept/reject registry |
+| `LoomonOrderProof` | `LOOMON_ORDER_PROOF_ADDRESS` env | Non-transferable proof NFT |
+
+Secrets such as deployer keys, minter keys, Supabase service-role keys, and API keys are intentionally not in the repository.
 
 ## Core demo flow
 
@@ -149,9 +176,12 @@ npm test
 - Secrets are intentionally kept out of the repository.
 - `.env`, `.env.local`, Vercel metadata, build outputs, logs, and contract broadcast artifacts are ignored.
 - Server-only keys should stay in local/Vercel environment variables.
+- The public `.env.example` contains variable names only, not real credentials.
 - The agent does not automatically send buyer/seller messages without user approval.
 - Wallet-signed actions remain explicit user actions.
 - Order images and custom briefs are scoped to the buyer and seller of that order.
+- Arc projections verify receipts, transaction sender, target contract, event name, and order id before writing order status.
+- See [SECURITY.md](SECURITY.md) for the repository security policy.
 
 ## Repository guide
 

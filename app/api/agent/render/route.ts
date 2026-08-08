@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/src/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -24,6 +25,17 @@ const renderJobs = (globalThis as typeof globalThis & { __loomonRenderJobs?: Map
 (globalThis as typeof globalThis & { __loomonRenderJobs?: Map<string, Promise<RenderResult>> }).__loomonRenderJobs = renderJobs;
 
 export async function POST(request: Request) {
+  const supabase = await createClient();
+  if (!supabase) {
+    return NextResponse.json({ error: "Auth is not configured." }, { status: 503 });
+  }
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Wallet sign-in required before rendering." }, { status: 401 });
+  }
+
   const form = await request.formData();
   const productImage = form.get("productImage");
   const artwork = form.get("artwork");
